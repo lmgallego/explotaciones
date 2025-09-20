@@ -1,0 +1,22 @@
+/* Layout */
+.block-container { padding-top: 1.5rem; padding-bottom: 2rem; }
+[data-testid="stSidebar"] { min-width: 320px; }
+
+/* Cards */
+.card {
+  background: #111827;
+  border: 1px solid #1f2937;
+  border-radius: 14px;
+  padding: 1rem 1.2rem;
+  margin-bottom: 1rem;
+}
+
+/* Titles */
+h1,h2,h3 { color: #E5E7EB; }
+.subtitle { color: #9CA3AF; font-size: 0.95rem; }
+
+/* Buttons */
+.stButton>button {
+  border-radius: 10px;
+  border: 1px solid #1f2937;
+}
