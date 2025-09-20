@@ -1,20 +1,113 @@
+# pages/02_Cavanet_Analyzer.py
+# ============================================================
+# Interfaz Streamlit para CAVANET (no toca RVC)
+# ============================================================
+
 import streamlit as st
+import pandas as pd
 
-st.title("Cavanet • Próximamente")
+from core.cavanet import (
+    RENDIMIENTO_POR_HECTAREA_DEFAULT,
+    AGRUPAR_POR_EJERCICIO_DEFAULT,
+    cargar_parcelas_desde_excel, procesar_parcelas, crear_dataframe_final_parcelas,
+    cargar_it04_df, construir_rendimiento_ajustado,
+    cargar_cavanet_desde_excel, procesar_cavanet,
+    crear_vartip_cavanet, controlar_rendimientos_por_fecha,
+    generar_resumenes_cavanet, build_excel_bytes_cavanet,
+)
 
-st.markdown("""
-Este módulo reutilizará los datos ya cargados de:
+st.set_page_config(page_title="CAVANET Analyzer", layout="wide")
+st.title("CAVANET Analyzer")
 
-- Parcelas (df_parcelas_clean, df_final)
-- IT04 (df_it04_aggr, df_rend_ajustado)
+# Fallback defensivo por si el import de la constante cambiara en el futuro
+_default_rend = float(RENDIMIENTO_POR_HECTAREA_DEFAULT) if 'RENDTIMIENTO_POR_HECTAREA_DEFAULT' in globals() \
+    else float(RENDIMIENTO_POR_HECTAREA_DEFAULT)
 
-y pedirá el archivo **Cavanet** cuando corresponda. La arquitectura actual
-permite añadir un flujo de procesamiento análogo al de RVC con:
-- Normalización y filtros
-- Cruces por VARTIP y parcela
-- Reparto CAVA/PGC si aplica o reglas propias de Cavanet
-- Exportación a Excel con las hojas requeridas
+with st.sidebar:
+    st.subheader("Parámetros")
+    rendimiento_ha = st.number_input(
+        "Rendimiento por hectárea (kg/ha)",
+        min_value=1.0, step=100.0,
+        value=_default_rend
+    )
+    agrupar_por_ejercicio = st.checkbox(
+        "Agrupar por Ejercicio",
+        value=AGRUPAR_POR_EJERCICIO_DEFAULT
+    )
 
-Cuando esté listo el formato definitivo de Cavanet, se implementará en `core/cavanet.py`
-y se añadirá la exportación en `core/export.py`.
-""")
+st.markdown("### 1) Subir archivos")
+col1, col2, col3 = st.columns(3)
+with col1:
+    f_parcelas = st.file_uploader("Parcelas (hoja 'Parcelas')", type=["xlsx", "xls"], key="cav_parcelas")
+with col2:
+    f_it04 = st.file_uploader("it04 (opc.)", type=["xlsx", "xls"], key="cav_it04")
+with col3:
+    f_cavanet = st.file_uploader("Cavanet", type=["xlsx", "xls"], key="cav_file")
+
+procesar = st.button("Procesar CAVANET", type="primary")
+
+if procesar:
+    if not f_parcelas or not f_cavanet:
+        st.error("Debes subir Parcelas y Cavanet.")
+        st.stop()
+
+    try:
+        # --- Parcelas ---
+        df_parcelas = cargar_parcelas_desde_excel(f_parcelas.read())
+        df_parcelas_clean = procesar_parcelas(df_parcelas)
+        df_final = crear_dataframe_final_parcelas(
+            df_parcelas_clean,
+            rendimiento_por_ha=rendimiento_ha,
+            agrupar_por_ejercicio=agrupar_por_ejercicio
+        )
+
+        st.success(f"Parcelas OK — VARTIPs: {df_final['vartip'].nunique():,}")
+        with st.expander("Parcelas (resumen)", expanded=False):
+            st.dataframe(df_final.head(50), use_container_width=True)
+
+        # --- IT04 ---
+        df_it04_aggr = cargar_it04_df(f_it04.read()) if f_it04 else None
+        df_rend_ajustado, _ = construir_rendimiento_ajustado(df_final, df_it04_aggr)
+
+        # --- Cavanet ---
+        df_cav = cargar_cavanet_desde_excel(f_cavanet.read())
+        df_cav_clean = procesar_cavanet(df_cav)
+
+        # Cruce y reparto
+        df_cav_con_rend = crear_vartip_cavanet(df_cav_clean, df_final, df_parcelas_clean, df_rend_ajustado)
+        if df_cav_con_rend.empty:
+            st.warning("Tras los cruces (NIF + parcela + VARTIP) no quedan pesadas. Revisa normalizaciones y columnas.")
+            st.stop()
+
+        df_procesado = controlar_rendimientos_por_fecha(df_cav_con_rend)
+        resumen_bodegas, resumen_vartips = generar_resumenes_cavanet(df_procesado)
+
+        st.markdown("### 2) Resultados")
+        tabs = st.tabs(["Pesadas procesadas", "Resumen bodegas", "Resumen VARTIPs"])
+        with tabs[0]:
+            st.dataframe(df_procesado.head(1000), use_container_width=True)
+        with tabs[1]:
+            st.dataframe(resumen_bodegas, use_container_width=True)
+        with tabs[2]:
+            st.dataframe(resumen_vartips, use_container_width=True)
+
+        # --- Excel de salida (incluye VARTIP_Detalle y VARTIP_Detalle_ticket) ---
+        xls_bytes = build_excel_bytes_cavanet(
+            df_procesado=df_procesado,
+            resumen_bodegas=resumen_bodegas,
+            resumen_vartips=resumen_vartips,
+            df_rend_ajustado=df_rend_ajustado,
+            df_it04_aggr=df_it04_aggr
+        )
+        st.download_button(
+            "Descargar Excel resultados (CAVANET)",
+            data=xls_bytes,
+            file_name="analisis_pesadas_cavanet_resultados.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+
+        st.success("Proceso completado.")
+
+    except Exception as e:
+        st.exception(e)
