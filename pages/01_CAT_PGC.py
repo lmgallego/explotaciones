@@ -17,7 +17,7 @@ from core.rvc import (
 from core.export import exportar_excel_parcelas, exportar_excel_rvc
 
 
-st.title("RVC • Análisis CAVA/PGC")
+st.title("CAT PGC")
 
 # -----------------------------
 # Parámetros (sidebar)
@@ -40,7 +40,7 @@ st.subheader("1) Parcelas")
 col1, col2 = st.columns([1, 1])
 with col1:
     f_parcelas = st.file_uploader(
-        "Suba el Excel de Parcelas (hoja 'Parcelas')",
+        "Subir archivo de Parcelas",
         type=["xlsx", "xls"],
         key="parcelas_upl"
     )
@@ -115,12 +115,12 @@ st.divider()
 # -----------------------------
 # 2) IT04
 # -----------------------------
-st.subheader("2) IT04 (kg a restar por VARTIP)")
+st.subheader("2) IT04")
 
 col3, col4 = st.columns([1, 1])
 with col3:
     f_it04 = st.file_uploader(
-        "Suba el archivo it04 (columnas 'vartip', 'kg_a_restar')",
+        "Suba el archivo it04",
         type=["xlsx", "xls", "csv"],
         key="it04_upl"
     )
@@ -165,7 +165,7 @@ st.divider()
 st.subheader("3) RVC")
 
 f_rvc = st.file_uploader(
-    "Suba el archivo RVC (pesadas)",
+    "Suba el archivo RVC",
     type=["xlsx", "xls", "csv"],
     key="rvc_upl"
 )

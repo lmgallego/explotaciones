@@ -16,8 +16,8 @@ from core.cavanet import (
     generar_resumenes_cavanet, build_excel_bytes_cavanet,
 )
 
-st.set_page_config(page_title="CAVANET Analyzer", layout="wide")
-st.title("CAVANET Analyzer")
+st.set_page_config(page_title="ESP PGC", layout="wide")
+st.title("ESP PGC")
 
 # Fallback defensivo por si el import de la constante cambiara en el futuro
 _default_rend = float(RENDIMIENTO_POR_HECTAREA_DEFAULT) if 'RENDTIMIENTO_POR_HECTAREA_DEFAULT' in globals() \
