@@ -1,10 +1,18 @@
 # pages/02_Cavanet_Analyzer.py
 # ============================================================
-# Interfaz Streamlit para CAVANET (no toca RVC)
+# Interfaz Streamlit para CAVANET 
 # ============================================================
 
 import streamlit as st
 import pandas as pd
+
+# Configurar layout wide permanente
+st.set_page_config(
+    page_title="ESP PGC",
+    page_icon="🍇",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 from core.cavanet import (
     RENDIMIENTO_POR_HECTAREA_DEFAULT,
@@ -16,7 +24,6 @@ from core.cavanet import (
     generar_resumenes_cavanet, build_excel_bytes_cavanet,
 )
 
-st.set_page_config(page_title="ESP PGC", layout="wide")
 st.title("ESP PGC")
 
 # Fallback defensivo por si el import de la constante cambiara en el futuro

@@ -2,20 +2,28 @@ import streamlit as st
 import pandas as pd
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 
+# Configurar layout wide permanente
+st.set_page_config(
+    page_title="Moviments Vi Base",
+    page_icon="🍇",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 from core.moviments_vi_base import procesar_moviments_vi_base
 
 st.title("MOVIMENTS VI BASE")
 
 # Crear pestañas
-tab1, tab2, tab3 = st.tabs(["📂 Procesamiento", "📊 Tabla Resultados", "📈 Gráficos"])
+tab1, tab2, tab3, tab4 = st.tabs(["📂 Processament", "📊 Resultats", "📦 Gestió Stocks", "📈 Gràfics"])
 
 with tab1:
-    st.subheader("Procesamiento de Moviments Vi Base")
+    st.subheader("Gestió i visualització de Moviments Vi Base")
     
     # Subir archivo
-    st.markdown("### Subir archivo Excel")
+    st.markdown("### Pujar arxiu Excel")
     uploaded_file = st.file_uploader(
-        "Selecciona el archivo Excel de Moviments Vi Base",
+        "Seleccionar arxiu moviments vi base Cavanet",
         type=["xlsx", "xls"],
         key="moviments_vi_base_file"
     )
@@ -23,44 +31,44 @@ with tab1:
     st.markdown("---")
     
     # Botón de procesamiento
-    if st.button("🚀 Procesar Archivo", type="primary", disabled=uploaded_file is None):
+    if st.button("Processar Arxiu", type="primary", disabled=uploaded_file is None):
         if uploaded_file is not None:
             try:
                 # Mostrar progreso
-                progress_bar = st.progress(0, text="Iniciando procesamiento...")
+                progress_bar = st.progress(0, text="Iniciant processament...")
                 
-                progress_bar.progress(20, text="Leyendo archivo Excel...")
+                progress_bar.progress(20, text="Llegint arxiu...")
                 file_bytes = uploaded_file.read()
                 
-                progress_bar.progress(40, text="Detectando encabezados...")
+                progress_bar.progress(40, text="Detectant headers...")
                 
-                progress_bar.progress(60, text="Normalizando datos...")
+                progress_bar.progress(60, text="Normalitzant dades...")
                 
-                progress_bar.progress(80, text="Procesando agrupación...")
+                progress_bar.progress(80, text="Procesant agrupació...")
                 
                 # Procesar archivo
                 df_resultado, excel_bytes = procesar_moviments_vi_base(file_bytes)
                 
-                progress_bar.progress(100, text="✅ Procesamiento completado")
+                progress_bar.progress(100, text="✅ Processament Completant amb èxit")
                 
                 # Guardar en session_state
                 st.session_state["df_moviments_resultado"] = df_resultado
                 st.session_state["excel_moviments_bytes"] = excel_bytes
                 
                 # Mostrar resumen
-                st.success(f"✅ Archivo procesado correctamente")
+                st.success(f"✅ Arxiu processat amb èxit")
                 
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.metric("Total registros", len(df_resultado))
+                    st.metric("Total registres", len(df_resultado))
                 with col2:
-                    st.metric("Instalaciones únicas", df_resultado["Instalacion"].nunique())
+                    st.metric("Instal.lacions Ùniques", df_resultado["Instalacion"].nunique())
                 with col3:
-                    st.metric("Tipos de vino", df_resultado["TipoVinoBase"].nunique())
+                    st.metric("Tipos de vi", df_resultado["TipoVinoBase"].nunique())
                 
                 # Botón de descarga
                 st.download_button(
-                    label="📥 Descargar Acumulado_Vi_Base.xlsx",
+                    label="📥 Descarregar Excel",
                     data=excel_bytes,
                     file_name="Acumulado_Vi_Base.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -68,17 +76,15 @@ with tab1:
                 )
                 
             except Exception as e:
-                st.error(f"❌ Error al procesar el archivo: {str(e)}")
+                st.error(f"❌ Error al processar l'arxiu: {str(e)}")
                 st.exception(e)
     
-    # Estado del procesamiento
+    # Mostrar información si hay datos procesados
     if "df_moviments_resultado" in st.session_state:
-        st.info("✅ Datos procesados disponibles en la pestaña 'Tabla Resultados'")
-    else:
-        st.info("📂 Sube un archivo Excel para comenzar el procesamiento")
+        st.info("✅ Dades processades disponibles a la secció 'Resultats'")
 
 with tab2:
-    st.subheader("Tabla de Resultados")
+    st.subheader("Resultats")
     
     if "df_moviments_resultado" in st.session_state:
         df_resultado = st.session_state["df_moviments_resultado"]
@@ -86,13 +92,13 @@ with tab2:
         # Métricas en contenedor más compacto
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("Total registros", len(df_resultado))
+            st.metric("Total registres", len(df_resultado))
         with col2:
-            st.metric("Instalaciones", df_resultado["Instalacion"].nunique())
+            st.metric("Instal.lacions", df_resultado["Instalacion"].nunique())
         with col3:
-            st.metric("Empresas", df_resultado["Empresa"].nunique())
+            st.metric("Empreses", df_resultado["Empresa"].nunique())
         with col4:
-            st.metric("Zonas", df_resultado["Zona"].nunique())
+            st.metric("Zones", df_resultado["Zona"].nunique())
         
         # Crear columna combinada Empresa_Instalacion
         df_resultado_con_empresa_instalacion = df_resultado.copy()
@@ -103,10 +109,10 @@ with tab2:
         
         # Sección de filtros más compacta
         with st.container():
-            st.markdown("### 🔍 Filtros")
+            st.markdown("### 🔍 Filtres")
             
             # Botón de reset en una sola línea
-            if st.button("🔄 Reestablecer filtros", use_container_width=True):
+            if st.button("🔄 Reestablir filtres", use_container_width=True):
                 # Resetear todos los filtros usando session_state
                 for key in ["filtro_empresa_instalacion", "filtro_tipo_vino", "filtro_segmento", "filtro_zona", "filtro_subzona"]:
                     if key in st.session_state:
@@ -165,7 +171,7 @@ with tab2:
                 if subzona_seleccionada != "Todas":
                     df_filtrado = df_filtrado[df_filtrado["SubZona"] == subzona_seleccionada]
         
-        st.markdown(f"### 📋 Tabla Filtrada ({len(df_filtrado)} registros)")
+        st.markdown(f"### 📋 Taula filtrada ({len(df_filtrado)} registres)")
         
         # Configurar AgGrid - Reordenar columnas para mostrar Empresa_Instalacion
         columnas_mostrar = ["Fecha", "Empresa_Instalacion", "TipoVinoBase", "Segmento", "Zona", "SubZona", "Acumulado"]
@@ -204,7 +210,7 @@ with tab2:
         
         # Botón de descarga para datos filtrados
         if len(df_filtrado) < len(df_resultado_con_empresa_instalacion):
-            st.markdown("### 📥 Descargar datos filtrados")
+            st.markdown("### 📥 Descarregar dades filtrades")
             
             # Generar Excel con datos filtrados (solo columnas relevantes)
             import io
@@ -213,55 +219,45 @@ with tab2:
                 df_para_mostrar.to_excel(writer, sheet_name="Datos Filtrados", index=False)
             
             st.download_button(
-                label="📥 Descargar datos filtrados",
+                label="📥 Descarregar Excel filtrat",
                 data=output.getvalue(),
                 file_name="Moviments_Vi_Base_Filtrado.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
     
     else:
-        st.info("📂 Procesa un archivo en la pestaña 'Procesamiento' para ver los resultados aquí")
+        st.info("📂 Processa un fitxer a la pestanya 'Processament' per veure els resultats aquí")
 
 with tab3:
-    st.subheader("Gráficos y Análisis")
+    st.subheader("Gestió Stocks")
     
     if "df_moviments_resultado" in st.session_state:
-        st.info("📈 Esta sección estará disponible próximamente para visualizaciones gráficas")
-        
-        # Placeholder para futuros gráficos
-        st.markdown("""
-        ### 🚧 Próximamente disponible:
-        
-        - Gráficos de distribución por zona
-        - Análisis temporal de acumulados
-        - Comparativas por tipo de vino base
-        - Mapas de instalaciones
-        - Y más visualizaciones...
-        """)
-        
-        # Mostrar algunos datos básicos mientras tanto
         df_resultado_con_empresa_instalacion = st.session_state["df_moviments_resultado"].copy()
         df_resultado_con_empresa_instalacion["Empresa_Instalacion"] = (
             df_resultado_con_empresa_instalacion["Empresa"] + "->" + 
             df_resultado_con_empresa_instalacion["Instalacion"]
         )
         
-        # Top 10 Instalaciones por Acumulado - Tabla a todo lo ancho
-        st.markdown("#### Top 10 Instalaciones por Acumulado")
-        top_instalaciones = df_resultado_con_empresa_instalacion.nlargest(10, "Acumulado")[["Empresa_Instalacion", "Acumulado"]]
+        # Todas las Instalaciones con Acumulado > 0 - Tabla a todo lo ancho
+        st.markdown("#### Instal.lacions amb Acumulat")
+        
+        # Agrupar por Empresa_Instalacion y sumar acumulados, luego filtrar > 0
+        instalaciones_agrupadas = df_resultado_con_empresa_instalacion.groupby("Empresa_Instalacion")["Acumulado"].sum().reset_index()
+        instalaciones_con_acumulado = instalaciones_agrupadas[instalaciones_agrupadas["Acumulado"] > 0].sort_values("Acumulado", ascending=False)
         
         # Configurar AgGrid para hacer la tabla clickeable
-        gb_top = GridOptionsBuilder.from_dataframe(top_instalaciones)
+        gb_top = GridOptionsBuilder.from_dataframe(instalaciones_con_acumulado)
         gb_top.configure_selection('single', use_checkbox=False, rowMultiSelectWithClick=False)
         gb_top.configure_default_column(resizable=True, sortable=True, flex=1)
         gb_top.configure_grid_options(domLayout='normal')
+        gb_top.configure_pagination(paginationAutoPageSize=True)
         
         # Mostrar tabla clickeable a todo lo ancho
         grid_response = AgGrid(
-            top_instalaciones,
+            instalaciones_con_acumulado,
             gridOptions=gb_top.build(),
             update_mode=GridUpdateMode.SELECTION_CHANGED,
-            height=350,
+            height=400,
             fit_columns_on_grid_load=True,
             theme='streamlit'
         )
@@ -270,18 +266,13 @@ with tab3:
         if grid_response['selected_rows'] is not None and len(grid_response['selected_rows']) > 0:
             selected_instalacion = grid_response['selected_rows'].iloc[0]['Empresa_Instalacion']
             st.session_state['instalacion_seleccionada'] = selected_instalacion
-            st.info(f"📍 Instalación seleccionada: {selected_instalacion}")
-        
-        # Distribución por Tipo de Vino Base - Tabla a todo lo ancho
-        st.markdown("#### Distribución por Tipo de Vino Base")
-        dist_tipo_vino = df_resultado_con_empresa_instalacion["TipoVinoBase"].value_counts().head(10)
-        st.dataframe(dist_tipo_vino, use_container_width=True)
+            st.info(f"📍 Instal.lació seleccionada: {selected_instalacion}")
         
         # Mostrar detalle de la instalación seleccionada
         if 'instalacion_seleccionada' in st.session_state:
             st.markdown("---")
             instalacion_sel = st.session_state['instalacion_seleccionada']
-            st.markdown(f"### 🔍 Detalle de: {instalacion_sel}")
+            st.markdown(f"### 🔍 Detall de: {instalacion_sel}")
             
             # Filtrar datos de la instalación seleccionada
             detalle_instalacion = df_resultado_con_empresa_instalacion[
@@ -292,16 +283,16 @@ with tab3:
                 # Mostrar métricas de la instalación
                 col_det1, col_det2, col_det3, col_det4 = st.columns(4)
                 with col_det1:
-                    st.metric("Total Registros", len(detalle_instalacion))
+                    st.metric("Total Registres", len(detalle_instalacion))
                 with col_det2:
-                    st.metric("Tipos de Vino", detalle_instalacion["TipoVinoBase"].nunique())
+                    st.metric("Tipus de Vi", detalle_instalacion["TipoVinoBase"].nunique())
                 with col_det3:
-                    st.metric("Segmentos", detalle_instalacion["Segmento"].nunique())
+                    st.metric("Segments", detalle_instalacion["Segmento"].nunique())
                 with col_det4:
-                    st.metric("Acumulado Total", f"{detalle_instalacion['Acumulado'].sum():,.0f}")
+                    st.metric("Acumulat Total", f"{detalle_instalacion['Acumulado'].sum():,.0f}")
                 
                 # Mostrar tabla detallada ordenada por fecha descendente y posición original
-                st.markdown("#### 📋 Registros de la Instalación (ordenados por fecha más reciente)")
+                st.markdown("#### Registres de l'instal.lació")
                 
                 # Ordenar por fecha descendente (más reciente primero) y luego por índice original
                 detalle_ordenado = detalle_instalacion.sort_values(
@@ -309,9 +300,11 @@ with tab3:
                     ascending=[False]
                 ).copy()
                 
-                # Seleccionar columnas relevantes para mostrar
+                # Seleccionar columnas relevantes para mostrar y filtrar acumulado > 0
                 columnas_detalle = ["Fecha", "TipoVinoBase", "Segmento", "Zona", "SubZona", "Acumulado"]
                 detalle_mostrar = detalle_ordenado[columnas_detalle].copy()
+                # Filtrar registros con acumulado mayor a 0
+                detalle_mostrar = detalle_mostrar[detalle_mostrar["Acumulado"] > 0]
                 
                 # Configurar AgGrid para el detalle
                 gb_detalle = GridOptionsBuilder.from_dataframe(detalle_mostrar)
@@ -335,10 +328,29 @@ with tab3:
                 )
                 
                 # Botón para limpiar selección
-                if st.button("🔄 Limpiar selección", key="limpiar_seleccion"):
+                if st.button("🔄 Netejar selecció", key="limpiar_seleccion"):
                     if 'instalacion_seleccionada' in st.session_state:
                         del st.session_state['instalacion_seleccionada']
                     st.rerun()
     
     else:
-        st.info("📂 Procesa un archivo en la pestaña 'Procesamiento' para ver los gráficos aquí")
+        st.info("📂 Procesa l'arxiu per veure els resultats aquí")
+
+with tab4:
+    st.subheader("Gràfics")
+    
+    if "df_moviments_resultado" in st.session_state:
+        st.info("📈 Esta sección estará disponible próximamente para visualizaciones gráficas")
+        
+        # Placeholder para futuros gráficos
+        st.markdown("""
+        ### 🚧 Próximamente disponible:
+        
+        - Gráficos de distribución por zona
+        - Análisis temporal de acumulados
+        - Comparativas por tipo de vino base
+        - Mapas de instalaciones
+        - Y más visualizaciones...
+        """)
+    else:
+        st.info("📂 Procesa l'arxiu per veure els gràfics aquí")

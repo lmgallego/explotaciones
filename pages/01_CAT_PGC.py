@@ -2,6 +2,14 @@ import streamlit as st
 import pandas as pd
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 
+# Configurar layout wide permanente
+st.set_page_config(
+    page_title="CAT PGC",
+    page_icon="🍇",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 # Constante con fallback limpio (10500 si no se pudiera importar)
 try:
     from core.utils import RENDIMIENTO_POR_HECTAREA_DEFAULT
@@ -136,7 +144,7 @@ with col4:
     if "df_rend_ajustado" in st.session_state:
         st.success("Ajustes IT04 ya calculados.")
 
-apply_it04 = st.button("Aplicar ajustes IT04")
+apply_it04 = st.button("Aplicar ajustes IT04", type="primary")
 
 if apply_it04:
     if "df_final" not in st.session_state:
