@@ -1,22 +1,182 @@
-/* Layout */
-.block-container { padding-top: 1.5rem; padding-bottom: 2rem; }
+/* Layout - Forzar ancho completo */
+.block-container { 
+  padding-top: 1.5rem !important; 
+  padding-bottom: 2rem !important; 
+  max-width: 100% !important;
+  width: 100% !important;
+  padding-left: 0.5rem !important;
+  padding-right: 0.5rem !important;
+}
+
 [data-testid="stSidebar"] { min-width: 320px; }
 
-/* Cards */
+/* Maximizar ancho de contenido - Más agresivo */
+.main .block-container {
+  max-width: none !important;
+  width: 100% !important;
+  padding-left: 0.5rem !important;
+  padding-right: 0.5rem !important;
+}
+
+/* Contenedor principal de Streamlit */
+.main {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* Eliminar márgenes del contenedor de la app */
+.stApp > div {
+  max-width: none !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* AgGrid optimización de ancho - Más específico */
+.ag-theme-streamlit {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.ag-root-wrapper {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.ag-root {
+  width: 100% !important;
+}
+
+/* Contenedores de Streamlit - Forzar ancho completo */
+[data-testid="column"] {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+[data-testid="stVerticalBlock"] {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+/* Tabs de Streamlit */
+[data-testid="stTabs"] {
+  width: 100% !important;
+}
+
+/* Elementos específicos de la tabla */
+div[data-testid="stDataFrame"] {
+  width: 100% !important;
+}
+
+/* Cards - Tema claro */
 .card {
-  background: #111827;
-  border: 1px solid #1f2937;
+  background: #F0F0F0;
+  border: 1px solid #D2D1CF;
   border-radius: 14px;
   padding: 1rem 1.2rem;
   margin-bottom: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-/* Titles */
-h1,h2,h3 { color: #E5E7EB; }
-.subtitle { color: #9CA3AF; font-size: 0.95rem; }
+/* Titles - Tema claro */
+h1, h2, h3 { 
+  color: #282827 !important; 
+}
 
-/* Buttons */
-.stButton>button {
+.subtitle { 
+  color: #4F4E4D !important; 
+  font-size: 0.95rem; 
+}
+
+/* Buttons - Tema claro */
+.stButton > button {
   border-radius: 10px;
-  border: 1px solid #1f2937;
+  border: 1px solid #D2D1CF;
+  background-color: #F8F8F8;
+  color: #282827;
+}
+
+.stButton > button:hover {
+  background-color: #E5E4E3;
+  border-color: #B2B0AE;
+}
+
+/* Estilos para botones de navegación personalizados */
+.stButton > button[kind="primary"] {
+  background: linear-gradient(135deg, #0F766E 0%, #0D5A52 100%) !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 10px !important;
+  padding: 0.75rem 1.5rem !important;
+  font-weight: 600 !important;
+  font-size: 1rem !important;
+  transition: all 0.3s ease !important;
+  box-shadow: 0 2px 4px rgba(15, 118, 110, 0.2) !important;
+  width: 100% !important;
+}
+
+.stButton > button[kind="primary"]:hover {
+  background: linear-gradient(135deg, #0D5A52 0%, #0B4A44 100%) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 8px rgba(15, 118, 110, 0.3) !important;
+}
+
+.stButton > button[kind="primary"]:active {
+  transform: translateY(0px) !important;
+}
+
+.button-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+/* Estilos para st.page_link */
+div[data-testid="stPageLink"] button {
+  background-color: #0F766E !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 10px !important;
+  padding: 12px 24px !important;
+  font-weight: 600 !important;
+  min-width: 200px !important;
+  transition: all 0.3s ease !important;
+}
+
+div[data-testid="stPageLink"] button:hover {
+  background-color: #0D5A52 !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.4) !important;
+}
+
+/* Selectbox y otros elementos de formulario */
+.stSelectbox > div > div {
+  background-color: #F8F8F8;
+  border-color: #D2D1CF;
+}
+
+/* Sidebar - Tema claro */
+.css-1d391kg {
+  background-color: #F0F0F0;
+}
+
+/* Métricas y elementos de datos */
+[data-testid="metric-container"] {
+  background-color: #F8F8F8;
+  border: 1px solid #E5E4E3;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+/* AgGrid tema claro personalizado */
+.ag-theme-streamlit .ag-header {
+  background-color: #F0F0F0;
+  border-bottom: 1px solid #D2D1CF;
+}
+
+.ag-theme-streamlit .ag-row {
+  border-bottom: 1px solid #E5E4E3;
+}
+
+.ag-theme-streamlit .ag-row:hover {
+  background-color: #F0F0F0;
 }
