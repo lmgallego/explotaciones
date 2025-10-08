@@ -180,3 +180,39 @@ div[data-testid="stPageLink"] button:hover {
 .ag-theme-streamlit .ag-row:hover {
   background-color: #F0F0F0;
 }
+
+/* Insights annual cards */
+.insight-card {
+  background: linear-gradient(135deg, #e5e4e3 0%, #d2d1cf 100%);
+  color: #6d6a68;
+  border: 1px solid #d2d1cf;
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.insight-icon {
+  width: 20px;
+  height: 20px;
+  margin-bottom: 4px;
+}
+
+.insight-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.insight-value {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.insight-subtitle {
+  font-size: 12px;
+  opacity: 0.85;
+}

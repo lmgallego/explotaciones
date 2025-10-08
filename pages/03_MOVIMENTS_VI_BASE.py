@@ -15,6 +15,17 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Cargar CSS personalizado también en esta página
+try:
+    import os
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    css_path = os.path.join(current_dir, '..', 'assets', 'styles.css')
+    if os.path.exists(css_path):
+        with open(css_path, 'r', encoding='utf-8') as f:
+            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+except Exception:
+    pass
+
 from core.moviments_vi_base import procesar_moviments_vi_base
 from core.colors import CUSTOM_PALETTE, CHART_COLORS, apply_custom_style_to_fig, get_color_sequence
 
@@ -477,8 +488,54 @@ with tab4:
         if not pd.api.types.is_datetime64_any_dtype(df_resultado['Fecha']):
             df_resultado['Fecha'] = pd.to_datetime(df_resultado['Fecha'], format='%d/%m/%Y', dayfirst=True)
         
+        # ====== Insights anuals (no afectats per filtres) ======
+        try:
+            df_any = df_resultado.copy()
+            any_actual = pd.Timestamp.today().year
+            df_any['Any'] = df_any['Fecha'].dt.year
+            df_any_actual = df_any[df_any['Any'] == any_actual]
+            
+            # Agrupació com a "Mètriques per Segment": per cada combinació única
+            # ens quedem amb el registre més recent (i en cas d'empat, el de menor FilaOriginal)
+            if not df_any_actual.empty:
+                df_any_actual_agrupat = (
+                    df_any_actual.groupby(['Empresa','TipoVinoBase','Zona','SubZona','Segmento'], group_keys=False)
+                                 .apply(lambda g: g.sort_values(['Fecha','FilaOriginal'], ascending=[False, True]).iloc[0])
+                                 .reset_index(drop=True)
+                )
+            else:
+                df_any_actual_agrupat = df_any_actual
+            
+            # Càlculs com a "Mètriques per Segment" però limitats a l'any en curs
+            litres_actuals = float(df_any_actual_agrupat['Acumulado'].sum()) if not df_any_actual_agrupat.empty else 0.0
+            guarda = float(df_any_actual_agrupat[df_any_actual_agrupat['Segmento'] == 'Guarda']['Acumulado'].sum()) if not df_any_actual_agrupat.empty else 0.0
+            guarda_superior = float(df_any_actual_agrupat[df_any_actual_agrupat['Segmento'] == 'Guarda Superior']['Acumulado'].sum()) if not df_any_actual_agrupat.empty else 0.0
+            gs_paratge = float(df_any_actual_agrupat[df_any_actual_agrupat['Segmento'] == 'Guarda Superior Paratge Qualificat']['Acumulado'].sum()) if not df_any_actual_agrupat.empty else 0.0
+            
+            # Comptatge de registres basat en la mateixa agrupació
+            regs_total = int(len(df_any_actual_agrupat))
+            regs_guarda = int(len(df_any_actual_agrupat[df_any_actual_agrupat['Segmento'] == 'Guarda']))
+            regs_guarda_sup = int(len(df_any_actual_agrupat[df_any_actual_agrupat['Segmento'] == 'Guarda Superior']))
+            regs_gs_paratge = int(len(df_any_actual_agrupat[df_any_actual_agrupat['Segmento'] == 'Guarda Superior Paratge Qualificat']))
+            
+            col_i1, col_i2, col_i3, col_i4 = st.columns(4)
+            
+            def fmt(v):
+                return f"{v:,.0f}" if v else "0"
+            
+            with col_i1:
+                st.markdown('<div class="insight-card"><div class="insight-title">Litres Actuals</div><div class="insight-value">' + fmt(litres_actuals) + '</div><div class="insight-subtitle">' + str(regs_total) + ' registres</div></div>', unsafe_allow_html=True)
+            with col_i2:
+                st.markdown('<div class="insight-card"><div class="insight-title">Guarda</div><div class="insight-value">' + fmt(guarda) + '</div><div class="insight-subtitle">' + str(regs_guarda) + ' registres</div></div>', unsafe_allow_html=True)
+            with col_i3:
+                st.markdown('<div class="insight-card"><div class="insight-title">Guarda Superior</div><div class="insight-value">' + fmt(guarda_superior) + '</div><div class="insight-subtitle">' + str(regs_guarda_sup) + ' registres</div></div>', unsafe_allow_html=True)
+            with col_i4:
+                st.markdown('<div class="insight-card"><div class="insight-title">G.S. Paratge Qualificat</div><div class="insight-value">' + fmt(gs_paratge) + '</div><div class="insight-subtitle">' + str(regs_gs_paratge) + ' registres</div></div>', unsafe_allow_html=True)
+        except Exception as _e:
+            st.caption("No s'han pogut calcular els insights anuals.")
+        
         # Selector de rango de fechas
-        st.markdown("### 📅 Seleccionar Rango de Fechas")
+        st.markdown("### Seleccionar Rang de Dates")
         
         # Obtener información de fechas disponibles
         min_date = df_resultado['Fecha'].min().date()
@@ -612,6 +669,7 @@ with tab4:
         else:
             # Crear columna de semana
             df_filtrado_fechas['Semana'] = df_filtrado_fechas['Fecha'].dt.to_period('W').astype(str)
+            df_filtrado_fechas['SemanaInicio'] = df_filtrado_fechas['Fecha'].dt.to_period('W').apply(lambda p: p.start_time)
             
             # Función para obtener el acumulado más reciente por grupo
             def obtener_acumulado_mas_reciente(grupo):
@@ -665,13 +723,13 @@ with tab4:
                 df_agrupado['Semana'] = df_agrupado['Fecha'].map(fecha_semana_map)
                 
                 # Sumar por Semana (suma de todas las combinaciones únicas en cada semana)
-                acumulado_semanal = df_agrupado.groupby('Semana')['Acumulado'].sum().reset_index()
+                acumulado_semanal = df_agrupado.groupby(['Semana','SemanaInicio'])['Acumulado'].sum().reset_index()
                 
             else:
                 # Modo todos los registros: sumar directamente todos los acumulados por semana
-                acumulado_semanal = df_filtrado_fechas.groupby('Semana')['Acumulado'].sum().reset_index()
+                acumulado_semanal = df_filtrado_fechas.groupby(['Semana','SemanaInicio'])['Acumulado'].sum().reset_index()
             
-            acumulado_semanal = acumulado_semanal.sort_values('Semana')
+            acumulado_semanal = acumulado_semanal.sort_values('SemanaInicio')
             
             # Crear gráfico de barras
             fig_barras = go.Figure()
@@ -927,8 +985,12 @@ with tab4:
                 with col_m1:
                     st.metric("Registros Filtrados", len(df_grafico_personalizado))
                 with col_m2:
-                    # Mantener el cálculo original: suma de todos los acumulados filtrados
-                    st.metric("Total Acumulat", f"{df_grafico_personalizado['Acumulado'].sum():,.0f}")
+                    # Calcular el acumulado total como el último punto visible del gráfico (cumsum)
+                    if len(personalizado_semanal) > 0:
+                        total_acumulat_metric = personalizado_semanal['Acumulado_Progresivo'].iloc[-1]
+                        st.metric("Acumulat total", f"{total_acumulat_metric:,.0f}")
+                    else:
+                        st.metric("Acumulat total", "Sense dades per el rang seleccionat")
                 with col_m3:
                     st.metric("Mitjana Setmanal", f"{personalizado_semanal['Acumulado'].mean():,.0f}")
             else:
