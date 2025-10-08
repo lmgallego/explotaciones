@@ -76,34 +76,41 @@ def normalizar_fecha(df: pd.DataFrame) -> pd.DataFrame:
         df_fecha["Fecha"] = pd.to_datetime(df_fecha["Fecha"], errors="coerce", dayfirst=True)
     return df_fecha
 
+def filtrar_empresas_excluidas(df: pd.DataFrame) -> pd.DataFrame:
+    """Filtra y elimina registros de empresas específicas"""
+    empresas_excluidas = ["2502-01", "2503-01", "2504-01", "4504-01", "4512-01"]
+    
+    df_filtrado = df.copy()
+    
+    # Buscar la columna que contiene la información de empresa
+    # Puede estar en diferentes columnas dependiendo del archivo
+    columnas_posibles = ["Empresa", "Codigo", "CodEmpresa", "Instalacion"]
+    
+    for columna in columnas_posibles:
+        if columna in df_filtrado.columns:
+            # Filtrar registros que NO estén en la lista de empresas excluidas
+            mask = ~df_filtrado[columna].astype(str).isin(empresas_excluidas)
+            df_filtrado = df_filtrado[mask]
+            break
+    
+    return df_filtrado
+
 def procesar_agrupacion(df: pd.DataFrame) -> pd.DataFrame:
-    """Realiza la agrupación tomando el registro más reciente por grupo"""
-    agrupacion = ["Instalacion", "TipoVinoBase", "Segmento", "Zona", "SubZona"]
+    """Mantiene todos los registros sin agrupación - la lógica de agrupación se aplicará en los cálculos posteriores"""
     
-    # Crear columna auxiliar con el orden original
-    df_proc = df.copy()
-    df_proc["RowOrder"] = df_proc.index
-    
-    # Ordenar por fecha descendente y RowOrder ascendente
-    # → si hay empate de fechas, se queda con el primer registro del Excel
-    df_sorted = df_proc.sort_values(by=["Fecha", "RowOrder"], ascending=[False, True])
-    
-    # Tomamos el registro más reciente (y en caso de empate, el primero del Excel)
-    df_acumulado = df_sorted.groupby(agrupacion, as_index=False).first()
-    
-    # Eliminar columna auxiliar
-    df_acumulado = df_acumulado.drop(columns=["RowOrder"], errors="ignore")
+    # Crear una copia del DataFrame sin modificaciones de agrupación
+    df_resultado = df.copy()
     
     # Ajustar formato de fecha dd/mm/aaaa
-    df_acumulado["Fecha"] = df_acumulado["Fecha"].dt.strftime("%d/%m/%Y")
+    df_resultado["Fecha"] = df_resultado["Fecha"].dt.strftime("%d/%m/%Y")
     
     # Selección final de columnas
-    df_acumulado = df_acumulado[[
+    df_resultado = df_resultado[[
         "Fecha", "Empresa", "Instalacion", "TipoVinoBase",
         "Segmento", "Zona", "SubZona", "Acumulado"
     ]]
     
-    return df_acumulado
+    return df_resultado
 
 def generar_excel_vi_base(df_acumulado: pd.DataFrame) -> bytes:
     """Genera el archivo Excel con los datos procesados"""
@@ -122,6 +129,9 @@ def procesar_moviments_vi_base(file_bytes: bytes) -> Tuple[pd.DataFrame, bytes]:
     
     # Normalizar fecha
     df = normalizar_fecha(df)
+    
+    # Filtrar empresas excluidas
+    df = filtrar_empresas_excluidas(df)
     
     # Procesar agrupación
     df_acumulado = procesar_agrupacion(df)

@@ -1,6 +1,11 @@
 import streamlit as st
 import pandas as pd
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
+import plotly.express as px
+import plotly.graph_objects as go
+from datetime import datetime, timedelta
+import numpy as np
+from sklearn.linear_model import LinearRegression
 
 # Configurar layout wide permanente
 st.set_page_config(
@@ -11,6 +16,74 @@ st.set_page_config(
 )
 
 from core.moviments_vi_base import procesar_moviments_vi_base
+from core.colors import CUSTOM_PALETTE, CHART_COLORS, apply_custom_style_to_fig, get_color_sequence
+
+# Funciones auxiliares para cálculo de acumulados
+def obtener_acumulado_mas_reciente(grupo):
+    """
+    Selecciona siempre el registro más reciente (fecha máxima) para cada grupo.
+    En caso de empate de fechas, desempata por menor FilaOriginal (orden original del Excel).
+    """
+    # Encontrar la fecha máxima en el grupo
+    fecha_max = grupo['Fecha'].max()
+    
+    # Filtrar registros con fecha máxima
+    registros_fecha_max = grupo[grupo['Fecha'] == fecha_max]
+    
+    # En caso de empate de fechas, tomar el registro con menor FilaOriginal (orden original)
+    registro_seleccionado = registros_fecha_max.loc[registros_fecha_max['FilaOriginal'].idxmin()]
+    
+    return registro_seleccionado
+
+
+def acumulado_estado_actual(df):
+    """
+    Calcula el estado actual tomando únicamente el último registro (más reciente)
+    de cada combinación única: Empresa + TipoVinoBase + Segmento + Zona + SubZona.
+    """
+    columnas = ["Empresa", "TipoVinoBase", "Segmento", "Zona", "SubZona"]
+    df_filtrado = df.groupby(columnas).apply(obtener_acumulado_mas_reciente).reset_index(drop=True)
+    return df_filtrado
+
+def acumulado_historico_completo(df):
+    """
+    Mantiene todos los registros históricos para preservar la evolución temporal.
+    Esta función es para mantener la lógica actual en la sección de Gráficos.
+    """
+    return df.copy()
+
+def calcular_opcions_filtres_dinamics(df, filtres_actuals, camps_filtres):
+    """
+    Calcula les opcions disponibles per a cada filtre basant-se en les seleccions actuals.
+    
+    Args:
+        df: DataFrame amb les dades
+        filtres_actuals: Dict amb els valors actuals dels filtres
+        camps_filtres: List amb els noms dels camps a filtrar
+    
+    Returns:
+        Dict amb les opcions disponibles per a cada camp
+    """
+    df_temp = df.copy()
+    
+    # Aplicar filtres existents (excepte els valors per defecte)
+    for camp, valor in filtres_actuals.items():
+        if valor not in ["Tots", "Todas", "Todos"] and camp in df_temp.columns:
+            df_temp = df_temp[df_temp[camp] == valor]
+    
+    # Calcular opcions disponibles per cada camp
+    opcions = {}
+    for camp in camps_filtres:
+        if camp in df_temp.columns:
+            valors_unics = sorted(df_temp[camp].dropna().unique().tolist())
+            
+            # Afegir valor per defecte segons el camp
+            if camp in ['Zona', 'SubZona']:
+                opcions[camp] = ["Todas"] + valors_unics
+            else:
+                opcions[camp] = ["Todos"] + valors_unics
+                
+    return opcions
 
 st.title("MOVIMENTS VI BASE")
 
@@ -123,13 +196,31 @@ with tab2:
             col_filter1, col_filter2, col_filter3 = st.columns(3)
             col_filter4, col_filter5 = st.columns(2)
             
-            # Aplicar filtros de forma cascada
+            # Aplicar filtres dinàmics
             df_filtrado = df_resultado_con_empresa_instalacion.copy()
             
+            # Obtenir valors actuals dels filtres des de session_state
+            filtres_actuals = {
+                'Empresa_Instalacion': st.session_state.get('filtro_empresa_instalacion', 'Todas'),
+                'TipoVinoBase': st.session_state.get('filtro_tipo_vino', 'Todos'),
+                'Segmento': st.session_state.get('filtro_segmento', 'Todos'),
+                'Zona': st.session_state.get('filtro_zona', 'Todas'),
+                'SubZona': st.session_state.get('filtro_subzona', 'Todas')
+            }
+            
+            # Calcular opcions disponibles basant-se en les seleccions actuals
+            camps_filtres = ['Empresa_Instalacion', 'TipoVinoBase', 'Segmento', 'Zona', 'SubZona']
+            opcions_disponibles = calcular_opcions_filtres_dinamics(df_resultado_con_empresa_instalacion, filtres_actuals, camps_filtres)
+
             with col_filter1:
                 # Filtro Empresa-Instalación
-                empresas_instalacion_disponibles = ["Todas"] + sorted(df_filtrado["Empresa_Instalacion"].dropna().unique().tolist())
-                empresa_instalacion_seleccionada = st.selectbox("Empresa - Instalación", empresas_instalacion_disponibles, key="filtro_empresa_instalacion")
+                empresa_instalacion_seleccionada = st.selectbox(
+                    "Empresa - Instalación", 
+                    opcions_disponibles['Empresa_Instalacion'], 
+                    index=0 if filtres_actuals['Empresa_Instalacion'] not in opcions_disponibles['Empresa_Instalacion'] 
+                          else opcions_disponibles['Empresa_Instalacion'].index(filtres_actuals['Empresa_Instalacion']),
+                    key="filtro_empresa_instalacion"
+                )
                 
                 # Aplicar filtro
                 if empresa_instalacion_seleccionada != "Todas":
@@ -137,8 +228,13 @@ with tab2:
             
             with col_filter2:
                 # Filtro Tipo Vino Base
-                tipos_vino_disponibles = ["Todos"] + sorted(df_filtrado["TipoVinoBase"].dropna().unique().tolist())
-                tipo_vino_seleccionado = st.selectbox("Tipo Vino Base", tipos_vino_disponibles, key="filtro_tipo_vino")
+                tipo_vino_seleccionado = st.selectbox(
+                    "Tipo Vino Base", 
+                    opcions_disponibles['TipoVinoBase'], 
+                    index=0 if filtres_actuals['TipoVinoBase'] not in opcions_disponibles['TipoVinoBase'] 
+                          else opcions_disponibles['TipoVinoBase'].index(filtres_actuals['TipoVinoBase']),
+                    key="filtro_tipo_vino"
+                )
                 
                 # Aplicar filtro
                 if tipo_vino_seleccionado != "Todos":
@@ -146,8 +242,13 @@ with tab2:
             
             with col_filter3:
                 # Filtro Segmento
-                segmentos_disponibles = ["Todos"] + sorted(df_filtrado["Segmento"].dropna().unique().tolist())
-                segmento_seleccionado = st.selectbox("Segmento", segmentos_disponibles, key="filtro_segmento")
+                segmento_seleccionado = st.selectbox(
+                    "Segmento", 
+                    opcions_disponibles['Segmento'], 
+                    index=0 if filtres_actuals['Segmento'] not in opcions_disponibles['Segmento'] 
+                          else opcions_disponibles['Segmento'].index(filtres_actuals['Segmento']),
+                    key="filtro_segmento"
+                )
                 
                 # Aplicar filtro
                 if segmento_seleccionado != "Todos":
@@ -155,8 +256,13 @@ with tab2:
             
             with col_filter4:
                 # Filtro Zona
-                zonas_disponibles = ["Todas"] + sorted(df_filtrado["Zona"].dropna().unique().tolist())
-                zona_seleccionada = st.selectbox("Zona", zonas_disponibles, key="filtro_zona")
+                zona_seleccionada = st.selectbox(
+                    "Zona", 
+                    opcions_disponibles['Zona'], 
+                    index=0 if filtres_actuals['Zona'] not in opcions_disponibles['Zona'] 
+                          else opcions_disponibles['Zona'].index(filtres_actuals['Zona']),
+                    key="filtro_zona"
+                )
                 
                 # Aplicar filtro
                 if zona_seleccionada != "Todas":
@@ -164,8 +270,13 @@ with tab2:
             
             with col_filter5:
                 # Filtro SubZona
-                subzonas_disponibles = ["Todas"] + sorted(df_filtrado["SubZona"].dropna().unique().tolist())
-                subzona_seleccionada = st.selectbox("SubZona", subzonas_disponibles, key="filtro_subzona")
+                subzona_seleccionada = st.selectbox(
+                    "SubZona", 
+                    opcions_disponibles['SubZona'], 
+                    index=0 if filtres_actuals['SubZona'] not in opcions_disponibles['SubZona'] 
+                          else opcions_disponibles['SubZona'].index(filtres_actuals['SubZona']),
+                    key="filtro_subzona"
+                )
                 
                 # Aplicar filtro
                 if subzona_seleccionada != "Todas":
@@ -238,11 +349,24 @@ with tab3:
             df_resultado_con_empresa_instalacion["Instalacion"]
         )
         
+        # Crear columna FilaOriginal para mantener el orden original del Excel
+        df_resultado_con_empresa_instalacion['FilaOriginal'] = range(len(df_resultado_con_empresa_instalacion))
+        # Convertir Fecha a datetime para comparar correctamente por fecha más reciente
+        if not pd.api.types.is_datetime64_any_dtype(df_resultado_con_empresa_instalacion['Fecha']):
+            df_resultado_con_empresa_instalacion['Fecha'] = pd.to_datetime(
+                df_resultado_con_empresa_instalacion['Fecha'],
+                format='%d/%m/%Y',
+                dayfirst=True,
+                errors='coerce'
+            )
+        
         # Todas las Instalaciones con Acumulado > 0 - Tabla a todo lo ancho
         st.markdown("#### Instal.lacions amb Acumulat")
         
         # Agrupar por Empresa_Instalacion y sumar acumulados, luego filtrar > 0
-        instalaciones_agrupadas = df_resultado_con_empresa_instalacion.groupby("Empresa_Instalacion")["Acumulado"].sum().reset_index()
+        # Usar lógica de estado actual: último registro por combinación única
+        df_estado_actual = acumulado_estado_actual(df_resultado_con_empresa_instalacion)
+        instalaciones_agrupadas = df_estado_actual.groupby("Empresa_Instalacion")["Acumulado"].sum().reset_index()
         instalaciones_con_acumulado = instalaciones_agrupadas[instalaciones_agrupadas["Acumulado"] > 0].sort_values("Acumulado", ascending=False)
         
         # Configurar AgGrid para hacer la tabla clickeable
@@ -274,10 +398,13 @@ with tab3:
             instalacion_sel = st.session_state['instalacion_seleccionada']
             st.markdown(f"### 🔍 Detall de: {instalacion_sel}")
             
-            # Filtrar datos de la instalación seleccionada
-            detalle_instalacion = df_resultado_con_empresa_instalacion[
+            # Filtrar datos de la instalación seleccionada y aplicar lógica de estado actual
+            detalle_instalacion_completo = df_resultado_con_empresa_instalacion[
                 df_resultado_con_empresa_instalacion["Empresa_Instalacion"] == instalacion_sel
             ].copy()
+            
+            # Aplicar lógica de estado actual para el detalle de la instalación
+            detalle_instalacion = acumulado_estado_actual(detalle_instalacion_completo)
             
             if not detalle_instalacion.empty:
                 # Mostrar métricas de la instalación
@@ -296,8 +423,8 @@ with tab3:
                 
                 # Ordenar por fecha descendente (más reciente primero) y luego por índice original
                 detalle_ordenado = detalle_instalacion.sort_values(
-                    by=["Fecha"], 
-                    ascending=[False]
+                    by=["Fecha", "FilaOriginal"], 
+                    ascending=[False, True]
                 ).copy()
                 
                 # Seleccionar columnas relevantes para mostrar y filtrar acumulado > 0
@@ -340,17 +467,472 @@ with tab4:
     st.subheader("Gràfics")
     
     if "df_moviments_resultado" in st.session_state:
-        st.info("📈 Esta sección estará disponible próximamente para visualizaciones gráficas")
+        df_resultado = st.session_state["df_moviments_resultado"]
         
-        # Placeholder para futuros gráficos
-        st.markdown("""
-        ### 🚧 Próximamente disponible:
+        # Crear columna FilaOriginal para mantener el orden original del Excel
+        df_resultado = df_resultado.copy()
+        df_resultado['FilaOriginal'] = range(len(df_resultado))
         
-        - Gráficos de distribución por zona
-        - Análisis temporal de acumulados
-        - Comparativas por tipo de vino base
-        - Mapas de instalaciones
-        - Y más visualizaciones...
-        """)
+        # Convertir la columna Fecha a datetime si no lo está
+        if not pd.api.types.is_datetime64_any_dtype(df_resultado['Fecha']):
+            df_resultado['Fecha'] = pd.to_datetime(df_resultado['Fecha'], format='%d/%m/%Y', dayfirst=True)
+        
+        # Selector de rango de fechas
+        st.markdown("### 📅 Seleccionar Rango de Fechas")
+        
+        # Obtener información de fechas disponibles
+        min_date = df_resultado['Fecha'].min().date()
+        max_date = df_resultado['Fecha'].max().date()
+        min_year = df_resultado['Fecha'].dt.year.min()
+        max_year = df_resultado['Fecha'].dt.year.max()
+        
+        # Selector de tipo de filtro de fecha
+        tipo_filtro_fecha = st.radio(
+            "Selecciona el tipo de filtro de fecha:",
+            options=["📅 Per Dates", "📆 Per Anys", "🗓️ Per Mesos"],
+            horizontal=True,
+            key="tipo_filtro_fecha_graficos"
+        )
+        
+        # Inicializar df_filtrado_fechas con todos los datos
+        df_filtrado_fechas = df_resultado.copy()
+        
+        if tipo_filtro_fecha == "📅 Per Dates":
+            st.markdown("**Selecciona un rang de dates específic**")
+            col_date1, col_date2 = st.columns(2)
+            
+            with col_date1:
+                # Establecer fecha de inicio por defecto al 01/01/2025
+                from datetime import date
+                default_start_date = date(2025, 1, 1)
+                
+                fecha_inicio = st.date_input(
+                    "Fecha de Inicio",
+                    value=default_start_date,
+                    min_value=min_date,
+                    max_value=max_date,
+                    key="fecha_inicio_graficos"
+                )
+            
+            with col_date2:
+                fecha_fin = st.date_input(
+                    "Fecha de Fin",
+                    value=max_date,
+                    min_value=min_date,
+                    max_value=max_date,
+                    key="fecha_fin_graficos"
+                )
+            
+            # Filtrar datos por rango de fechas
+            df_filtrado_fechas = df_resultado[
+                (df_resultado['Fecha'].dt.date >= fecha_inicio) & 
+                (df_resultado['Fecha'].dt.date <= fecha_fin)
+            ].copy()
+            
+            st.info(f"📊 Mostrant dades del {fecha_inicio} al {fecha_fin}")
+        
+        elif tipo_filtro_fecha == "📆 Per Anys":
+            st.markdown("**Selecciona un o més anys**")
+            
+            # Obtener lista de años disponibles
+            years_available = sorted(df_resultado['Fecha'].dt.year.unique())
+            
+            # Selector múltiple de años
+            selected_years = st.multiselect(
+                "Selecciona els anys:",
+                options=years_available,
+                default=[2025] if 2025 in years_available else [max_year],
+                key="selected_years_graficos"
+            )
+            
+            if selected_years:
+                # Filtrar datos por años seleccionados
+                df_filtrado_fechas = df_resultado[
+                    df_resultado['Fecha'].dt.year.isin(selected_years)
+                ].copy()
+                
+                st.info(f"📊 Mostrant dades per als anys: {', '.join(map(str, selected_years))}")
+            else:
+                st.warning("⚠️ Selecciona almenys un any")
+                df_filtrado_fechas = df_resultado.copy()
+        
+        elif tipo_filtro_fecha == "🗓️ Per Mesos":
+            st.markdown("**Selecciona un o més mesos**")
+            
+            col_year_month, col_months = st.columns([1, 2])
+            
+            with col_year_month:
+                # Selector de año para filtrar meses
+                year_for_months = st.selectbox(
+                    "Any de referència:",
+                    options=sorted(df_resultado['Fecha'].dt.year.unique()),
+                    index=len(sorted(df_resultado['Fecha'].dt.year.unique())) - 1,  # Último año por defecto
+                    key="year_for_months_graficos"
+                )
+            
+            with col_months:
+                # Obtener meses disponibles para el año seleccionado
+                months_in_year = df_resultado[
+                    df_resultado['Fecha'].dt.year == year_for_months
+                ]['Fecha'].dt.month.unique()
+                
+                month_names = {
+                    1: "Gener", 2: "Febrer", 3: "Març", 4: "Abril",
+                    5: "Maig", 6: "Juny", 7: "Juliol", 8: "Agost",
+                    9: "Setembre", 10: "Octubre", 11: "Novembre", 12: "Desembre"
+                }
+                
+                available_months = [(month, month_names[month]) for month in sorted(months_in_year)]
+                
+                selected_months = st.multiselect(
+                    "Selecciona els mesos:",
+                    options=[month[0] for month in available_months],
+                    format_func=lambda x: month_names[x],
+                    default=[month[0] for month in available_months[:3]] if available_months else [],
+                    key="selected_months_graficos"
+                )
+            
+            if selected_months:
+                # Filtrar datos por año y meses seleccionados
+                df_filtrado_fechas = df_resultado[
+                    (df_resultado['Fecha'].dt.year == year_for_months) &
+                    (df_resultado['Fecha'].dt.month.isin(selected_months))
+                ].copy()
+                
+                selected_month_names = [month_names[month] for month in selected_months]
+                st.info(f"📊 Mostrant dades per {year_for_months}: {', '.join(selected_month_names)}")
+            else:
+                st.warning("⚠️ Selecciona almenys un mes")
+                df_filtrado_fechas = df_resultado[
+                    df_resultado['Fecha'].dt.year == year_for_months
+                ].copy()
+        
+        if len(df_filtrado_fechas) == 0:
+            st.warning("⚠️ No hi ha dades en el període seleccionat")
+        else:
+            # Crear columna de semana
+            df_filtrado_fechas['Semana'] = df_filtrado_fechas['Fecha'].dt.to_period('W').astype(str)
+            
+            # Función para obtener el acumulado más reciente por grupo
+            def obtener_acumulado_mas_reciente(grupo):
+                """
+                Para un grupo, devuelve el registro completo con fecha más reciente.
+                En caso de empate de fechas, devuelve el de menor FilaOriginal (orden original del Excel).
+                """
+                # Encontrar la fecha máxima en el grupo
+                fecha_max = grupo['Fecha'].max()
+                
+                # Filtrar registros con fecha máxima
+                registros_fecha_max = grupo[grupo['Fecha'] == fecha_max]
+                
+                # En caso de empate de fechas, tomar el registro con menor FilaOriginal (orden original)
+                registro_seleccionado = registros_fecha_max.loc[registros_fecha_max['FilaOriginal'].idxmin()]
+                
+                return registro_seleccionado
+            
+            def obtener_acumulado_por_combinacion_unica(df, columnas_agrupacion):
+                """
+                Agrupa por las columnas especificadas (incluyendo Segmento) y obtiene el registro más reciente.
+                En caso de empate de fecha, se queda con el de menor FilaOriginal (posición original en el Excel).
+                """
+                resultado = (
+                    df.groupby(columnas_agrupacion, group_keys=False)
+                      .apply(lambda grupo: grupo.sort_values(
+                          ['Fecha','FilaOriginal'], ascending=[False, True]).iloc[0])
+                      .reset_index(drop=True)
+                )
+                return resultado
+            
+            st.markdown("---")
+            
+            # Siempre usar modo agrupado (recomendado)
+            usar_agrupacion = True
+            
+            st.markdown("---")
+            
+            # 1. GRÁFICO DE ACUMULADO TOTAL CON LÍNEA DE TENDENCIA
+            st.markdown("### Acumulat total per setmanes")
+            
+            if usar_agrupacion:
+                # Modo agrupado: obtener el acumulado más reciente de cada combinación única POR EMPRESA
+                # Agrupa por: Empresa, TipoVinoBase, Zona, SubZona, Segmento
+                df_agrupado = obtener_acumulado_por_combinacion_unica(df_filtrado_fechas, ['Empresa', 'TipoVinoBase', 'Zona', 'SubZona', 'Segmento'])
+                
+                # Re-agregar la columna Semana basada en los datos originales
+                # Crear mapeo solo para Semana (Segmento ya está incluido en la agrupación)
+                fecha_semana_map = df_filtrado_fechas[['Fecha', 'Semana']].drop_duplicates().set_index('Fecha')['Semana'].to_dict()
+                
+                df_agrupado['Semana'] = df_agrupado['Fecha'].map(fecha_semana_map)
+                
+                # Sumar por Semana (suma de todas las combinaciones únicas en cada semana)
+                acumulado_semanal = df_agrupado.groupby('Semana')['Acumulado'].sum().reset_index()
+                
+            else:
+                # Modo todos los registros: sumar directamente todos los acumulados por semana
+                acumulado_semanal = df_filtrado_fechas.groupby('Semana')['Acumulado'].sum().reset_index()
+            
+            acumulado_semanal = acumulado_semanal.sort_values('Semana')
+            
+            # Crear gráfico de barras
+            fig_barras = go.Figure()
+            
+            # Agregar barras
+            fig_barras.add_trace(go.Bar(
+                x=acumulado_semanal['Semana'],
+                y=acumulado_semanal['Acumulado'],
+                name='Acumulado Semanal',
+                marker_color=CUSTOM_PALETTE['600'],
+                opacity=0.8,
+                hovertemplate='<b>Semana:</b> %{x}<br>' +
+                             '<b>Acumulado:</b> %{y:,.0f}<br>' +
+                             '<extra></extra>'
+            ))
+            
+            # Calcular línea de tendencia (regresión lineal)
+            if len(acumulado_semanal) > 1:
+                x_numeric = np.arange(len(acumulado_semanal)).reshape(-1, 1)
+                y_values = acumulado_semanal['Acumulado'].values
+                
+                reg_model = LinearRegression()
+                reg_model.fit(x_numeric, y_values)
+                y_pred = reg_model.predict(x_numeric)
+                
+                # Agregar línea de tendencia
+                fig_barras.add_trace(go.Scatter(
+                    x=acumulado_semanal['Semana'],
+                    y=y_pred,
+                    mode='lines',
+                    name='Tendencia (Regresión Lineal)',
+                    line=dict(color=CUSTOM_PALETTE['900'], width=3, dash='dash'),
+                    hovertemplate='<b>Semana:</b> %{x}<br>' +
+                                 '<b>Tendencia:</b> %{y:,.0f}<br>' +
+                                 '<extra></extra>'
+                ))
+            
+            # Aplicar estilo personalizado
+            fig_barras = apply_custom_style_to_fig(fig_barras)
+            fig_barras.update_layout(
+                title="Acumulat Total per Setmanes",
+                xaxis_title="Setmana",
+                yaxis_title="Acumulat",
+                height=400,
+                showlegend=True,
+                hovermode='x unified',
+                hoverlabel=dict(
+                    bgcolor="white",
+                    bordercolor=CUSTOM_PALETTE['600'],
+                    font_size=12,
+                    font_family="Arial"
+                )
+            )
+            
+            st.plotly_chart(fig_barras, use_container_width=True)
+            
+            st.markdown("---")
+            
+            # 2. GRÁFICO DE PASTEL POR SEGMENTOS
+            col_pie1, col_pie2 = st.columns([1, 1])
+            
+            with col_pie1:
+                st.markdown("### Distribució per Segments")
+                
+                if usar_agrupacion:
+                    # Modo agrupado: obtener el acumulado más reciente de cada combinación única POR EMPRESA
+                    # Agrupa por: Empresa, TipoVinoBase, Zona, SubZona, Segmento
+                    df_agrupado = obtener_acumulado_por_combinacion_unica(df_filtrado_fechas, ['Empresa', 'TipoVinoBase', 'Zona', 'SubZona', 'Segmento'])
+                    
+                    # Sumar por Segmento
+                    segmentos_data = df_agrupado.groupby('Segmento')['Acumulado'].sum().reset_index()
+                    
+
+                else:
+                    # Modo todos los registros: sumar directamente por segmento
+                    segmentos_data = df_filtrado_fechas.groupby('Segmento')['Acumulado'].sum().reset_index()
+                
+                segmentos_data = segmentos_data.sort_values('Acumulado', ascending=False)
+                
+                # Crear gráfico de pastel
+                fig_pie = go.Figure(data=[go.Pie(
+                    labels=segmentos_data['Segmento'],
+                    values=segmentos_data['Acumulado'],
+                    hole=0.3,
+                    marker=dict(colors=get_color_sequence(len(segmentos_data))),
+                    textinfo='label+percent+value',
+                    textposition='auto',
+                    hovertemplate='<b>Segmento:</b> %{label}<br>' +
+                                 '<b>Acumulado:</b> %{value:,.0f}<br>' +
+                                 '<b>Porcentaje:</b> %{percent}<br>' +
+                                 '<extra></extra>'
+                )])
+                
+                fig_pie = apply_custom_style_to_fig(fig_pie)
+                fig_pie.update_layout(
+                    title="Acumulado por Segmentos",
+                    height=400,
+                    showlegend=True,
+                    hoverlabel=dict(
+                        bgcolor="white",
+                        bordercolor=CUSTOM_PALETTE['600'],
+                        font_size=12,
+                        font_family="Arial"
+                    )
+                )
+                
+                st.plotly_chart(fig_pie, use_container_width=True)
+            
+            with col_pie2:
+                st.markdown("### Mètriques per Segment")
+                
+                for idx, row in segmentos_data.iterrows():
+                    porcentaje = (row['Acumulado'] / segmentos_data['Acumulado'].sum()) * 100
+                    st.metric(
+                        label=row['Segmento'],
+                        value=f"{row['Acumulado']:,.0f}",
+                        delta=f"{porcentaje:.1f}%"
+                    )
+            
+            st.markdown("---")
+            
+            # 3. GRÁFICO PERSONALIZADO CON FILTROS
+            st.markdown("### Temporal per Tipologia")
+            
+            # Filtros personalizados dinàmics
+            col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+            
+            # Obtenir valors actuals dels filtres des de session_state
+            filtres_grafic_actuals = {
+                'TipoVinoBase': st.session_state.get('grafico_tipo_vino', 'Todos'),
+                'Segmento': st.session_state.get('grafico_segmento', 'Todos'),
+                'Zona': st.session_state.get('grafico_zona', 'Todas'),
+                'SubZona': st.session_state.get('grafico_subzona', 'Todas')
+            }
+            
+            # Calcular opcions disponibles basant-se en les seleccions actuals
+            camps_filtres_grafic = ['TipoVinoBase', 'Segmento', 'Zona', 'SubZona']
+            opcions_grafic_disponibles = calcular_opcions_filtres_dinamics(df_filtrado_fechas, filtres_grafic_actuals, camps_filtres_grafic)
+
+            with col_f1:
+                tipo_vino_grafico = st.selectbox(
+                    "Tipo Vino Base", 
+                    opcions_grafic_disponibles['TipoVinoBase'], 
+                    index=0 if filtres_grafic_actuals['TipoVinoBase'] not in opcions_grafic_disponibles['TipoVinoBase'] 
+                          else opcions_grafic_disponibles['TipoVinoBase'].index(filtres_grafic_actuals['TipoVinoBase']),
+                    key="grafico_tipo_vino"
+                )
+
+            with col_f2:
+                segmento_grafico = st.selectbox(
+                    "Segmento", 
+                    opcions_grafic_disponibles['Segmento'], 
+                    index=0 if filtres_grafic_actuals['Segmento'] not in opcions_grafic_disponibles['Segmento'] 
+                          else opcions_grafic_disponibles['Segmento'].index(filtres_grafic_actuals['Segmento']),
+                    key="grafico_segmento"
+                )
+
+            with col_f3:
+                zona_grafico = st.selectbox(
+                    "Zona", 
+                    opcions_grafic_disponibles['Zona'], 
+                    index=0 if filtres_grafic_actuals['Zona'] not in opcions_grafic_disponibles['Zona'] 
+                          else opcions_grafic_disponibles['Zona'].index(filtres_grafic_actuals['Zona']),
+                    key="grafico_zona"
+                )
+
+            with col_f4:
+                subzona_grafico = st.selectbox(
+                    "SubZona", 
+                    opcions_grafic_disponibles['SubZona'], 
+                    index=0 if filtres_grafic_actuals['SubZona'] not in opcions_grafic_disponibles['SubZona'] 
+                          else opcions_grafic_disponibles['SubZona'].index(filtres_grafic_actuals['SubZona']),
+                    key="grafico_subzona"
+                )
+            
+            # Aplicar filtros
+            df_grafico_personalizado = df_filtrado_fechas.copy()
+            
+            if tipo_vino_grafico != "Todos":
+                df_grafico_personalizado = df_grafico_personalizado[df_grafico_personalizado["TipoVinoBase"] == tipo_vino_grafico]
+            
+            if segmento_grafico != "Todos":
+                df_grafico_personalizado = df_grafico_personalizado[df_grafico_personalizado["Segmento"] == segmento_grafico]
+            
+            if zona_grafico != "Todas":
+                df_grafico_personalizado = df_grafico_personalizado[df_grafico_personalizado["Zona"] == zona_grafico]
+            
+            if subzona_grafico != "Todas":
+                df_grafico_personalizado = df_grafico_personalizado[df_grafico_personalizado["SubZona"] == subzona_grafico]
+            
+            # Mostrar gráfico personalizado si hay datos
+            if len(df_grafico_personalizado) > 0:
+                # Aplicar el mismo modo de cálculo seleccionado
+                if usar_agrupacion:
+                    # Modo agrupado: obtener el acumulado más reciente de cada combinación única
+                    # Agrupar por Empresa + TipoVinoBase + Zona + SubZona + Segmento
+                    personalizado_detalle_data = obtener_acumulado_por_combinacion_unica(
+                        df_grafico_personalizado, 
+                        ['Empresa', 'TipoVinoBase', 'Zona', 'SubZona', 'Segmento']
+                    )
+                    
+                    # Agregar la columna Semana basada en la fecha más reciente de cada combinación
+                    # Crear un mapeo de semanas usando el DataFrame original
+                    fecha_semana_map = df_grafico_personalizado[['Fecha', 'Semana']].drop_duplicates().set_index('Fecha')['Semana'].to_dict()
+                    personalizado_detalle_data['Semana'] = personalizado_detalle_data['Fecha'].map(fecha_semana_map)
+                    
+                    # Sumar por semana
+                    personalizado_semanal = personalizado_detalle_data.groupby('Semana')['Acumulado'].sum().reset_index()
+                else:
+                    # Modo todos los registros: sumar directamente por semana
+                    personalizado_semanal = df_grafico_personalizado.groupby('Semana')['Acumulado'].sum().reset_index()
+                
+                personalizado_semanal = personalizado_semanal.sort_values('Semana')
+                
+                # Crear acumulado progresivo (cada punto suma al anterior)
+                personalizado_semanal['Acumulado_Progresivo'] = personalizado_semanal['Acumulado'].cumsum()
+                
+                # Crear gráfico de líneas
+                fig_personalizado = go.Figure()
+                
+                fig_personalizado.add_trace(go.Scatter(
+                    x=personalizado_semanal['Semana'],
+                    y=personalizado_semanal['Acumulado_Progresivo'],
+                    mode='lines+markers',
+                    name='Acumulado Filtrado',
+                    line=dict(color=CUSTOM_PALETTE['700'], width=3),
+                    marker=dict(size=8, color=CUSTOM_PALETTE['600']),
+                    hovertemplate='<b>Semana:</b> %{x}<br>' +
+                                 '<b>Acumulado Total:</b> %{y:,.0f}<br>' +
+                                 '<extra></extra>'
+                ))
+                
+                fig_personalizado = apply_custom_style_to_fig(fig_personalizado)
+                fig_personalizado.update_layout(
+                    title="Acumulat setmanal",
+                    xaxis_title="Setmana",
+                    yaxis_title="Acumulat",
+                    height=400,
+                    showlegend=True,
+                    hovermode='x unified',
+                    hoverlabel=dict(
+                        bgcolor="white",
+                        bordercolor=CUSTOM_PALETTE['600'],
+                        font_size=12,
+                        font_family="Arial"
+                    )
+                )
+                
+                st.plotly_chart(fig_personalizado, use_container_width=True)
+                
+                # Mostrar métricas del filtro
+                col_m1, col_m2, col_m3 = st.columns(3)
+                with col_m1:
+                    st.metric("Registros Filtrados", len(df_grafico_personalizado))
+                with col_m2:
+                    # Mantener el cálculo original: suma de todos los acumulados filtrados
+                    st.metric("Total Acumulat", f"{df_grafico_personalizado['Acumulado'].sum():,.0f}")
+                with col_m3:
+                    st.metric("Mitjana Setmanal", f"{personalizado_semanal['Acumulado'].mean():,.0f}")
+            else:
+                st.warning("⚠️ No hi han dades amb els filtres seleccionats")
+    
     else:
         st.info("📂 Procesa l'arxiu per veure els gràfics aquí")

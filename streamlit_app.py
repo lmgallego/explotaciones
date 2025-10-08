@@ -20,8 +20,21 @@ st.set_page_config(
 
 # Cargar CSS personalizado
 def load_css():
-    with open('assets/styles.css') as f:
-        st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+    try:
+        # Usar ruta absoluta basada en la ubicación del script
+        import os
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        css_path = os.path.join(current_dir, 'assets', 'styles.css')
+        
+        if os.path.exists(css_path):
+            with open(css_path, 'r', encoding='utf-8') as f:
+                st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+        else:
+            # Si no existe el archivo, continuar sin mostrar error
+            pass
+    except Exception as e:
+        # Silenciar errores de CSS para no interrumpir la aplicación
+        pass
 
 load_css()
 
