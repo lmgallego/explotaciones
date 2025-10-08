@@ -8,7 +8,7 @@
   padding-right: 0.5rem !important;
 }
 
-[data-testid="stSidebar"] { min-width: 320px; }
+[data-testid="stSidebar"] { min-width: 0 !important; }
 
 /* Maximizar ancho de contenido - Más agresivo */
 .main .block-container {
