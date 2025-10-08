@@ -137,6 +137,6 @@ st.markdown("---")
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #4F4E4D; font-size: 0.9rem;">
-    <p>Sistema Control PGC - Versión 2024</p>
+    <p>Sistema Control PGC - Versión 2025</p>
 </div>
 """, unsafe_allow_html=True)
