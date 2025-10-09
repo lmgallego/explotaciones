@@ -46,7 +46,6 @@ def obtener_acumulado_mas_reciente(grupo):
     
     return registro_seleccionado
 
-
 def acumulado_estado_actual(df):
     """
     Calcula el estado actual tomando únicamente el último registro (más reciente)
@@ -295,40 +294,42 @@ with tab2:
         
         st.markdown(f"### 📋 Taula filtrada ({len(df_filtrado)} registres)")
         
-        # Configurar AgGrid - Reordenar columnas para mostrar Empresa_Instalacion
+        # Preparar datos para mostrar
         columnas_mostrar = ["Fecha", "Empresa_Instalacion", "TipoVinoBase", "Segmento", "Zona", "SubZona", "Acumulado"]
         df_para_mostrar = df_filtrado[columnas_mostrar].copy()
         
-        # Configurar AgGrid para máximo aprovechamiento del ancho
-        gb = GridOptionsBuilder.from_dataframe(df_para_mostrar)
-        gb.configure_default_column(
-            resizable=True, 
-            filter=True, 
-            sortable=True,
-            minWidth=100,
-            flex=1  # Permite que las columnas se expandan proporcionalmente
-        )
-        gb.configure_pagination(paginationAutoPageSize=True)
-        # Eliminado el sidebar de AgGrid para evitar el error de módulos no registrados (#200)
-        # gb.configure_side_bar()
+        # Convertir Fecha a string si es datetime
+        if pd.api.types.is_datetime64_any_dtype(df_para_mostrar['Fecha']):
+            df_para_mostrar['Fecha'] = df_para_mostrar['Fecha'].dt.strftime('%d/%m/%Y')
         
-        # Configuraciones adicionales para maximizar el ancho
-        gb.configure_grid_options(
-            domLayout='normal',
-            suppressHorizontalScroll=False,
-            enableRangeSelection=False,
-            rowSelection='multiple'
-        )
+        # Convertir tipos numpy a Python nativos para evitar problemas
+        for col in df_para_mostrar.select_dtypes(include=['int64', 'int32', 'int16', 'int8']).columns:
+            df_para_mostrar[col] = df_para_mostrar[col].astype(object)
+        for col in df_para_mostrar.select_dtypes(include=['float64', 'float32']).columns:
+            df_para_mostrar[col] = df_para_mostrar[col].astype(object)
         
-        # Usar contenedor completo para la tabla
-        AgGrid(
+        # Resetear índice
+        df_para_mostrar = df_para_mostrar.reset_index(drop=True)
+        
+        # Mostrar tabla con st.dataframe nativo (más rápido y confiable)
+        st.dataframe(
             df_para_mostrar,
-            gridOptions=gb.build(),
-            update_mode=GridUpdateMode.NO_UPDATE,
-            height=600,  # Aumentar altura también
-            fit_columns_on_grid_load=True,
-            allow_unsafe_jscode=True,
-            theme='streamlit'  # Tema que se adapta mejor al ancho
+            use_container_width=True,
+            height=600,
+            hide_index=True,
+            column_config={
+                "Fecha": st.column_config.TextColumn("Fecha", width="small"),
+                "Empresa_Instalacion": st.column_config.TextColumn("Empresa - Instalación", width="large"),
+                "TipoVinoBase": st.column_config.TextColumn("Tipo Vino Base", width="medium"),
+                "Segmento": st.column_config.TextColumn("Segmento", width="medium"),
+                "Zona": st.column_config.TextColumn("Zona", width="medium"),
+                "SubZona": st.column_config.TextColumn("SubZona", width="medium"),
+                "Acumulado": st.column_config.NumberColumn(
+                    "Acumulado",
+                    format="%d",
+                    width="medium"
+                )
+            }
         )
         
         # Botón de descarga para datos filtrados
@@ -378,31 +379,41 @@ with tab3:
         # Agrupar por Empresa_Instalacion y sumar acumulados, luego filtrar > 0
         # Usar lógica de estado actual: último registro por combinación única
         df_estado_actual = acumulado_estado_actual(df_resultado_con_empresa_instalacion)
+        
         instalaciones_agrupadas = df_estado_actual.groupby("Empresa_Instalacion")["Acumulado"].sum().reset_index()
+        
         instalaciones_con_acumulado = instalaciones_agrupadas[instalaciones_agrupadas["Acumulado"] > 0].sort_values("Acumulado", ascending=False)
+        # Convertir tipos numpy a Python nativos antes de AgGrid
+        instalaciones_con_acumulado = instalaciones_con_acumulado.copy()
+        for col in instalaciones_con_acumulado.select_dtypes(include=['int64', 'int32', 'int16', 'int8']).columns:
+            instalaciones_con_acumulado[col] = instalaciones_con_acumulado[col].astype(object)
+        for col in instalaciones_con_acumulado.select_dtypes(include=['float64', 'float32']).columns:
+            instalaciones_con_acumulado[col] = instalaciones_con_acumulado[col].astype(object)
         
-        # Configurar AgGrid para hacer la tabla clickeable
-        gb_top = GridOptionsBuilder.from_dataframe(instalaciones_con_acumulado)
-        gb_top.configure_selection('single', use_checkbox=False, rowMultiSelectWithClick=False)
-        gb_top.configure_default_column(resizable=True, sortable=True, flex=1)
-        gb_top.configure_grid_options(domLayout='normal')
-        gb_top.configure_pagination(paginationAutoPageSize=True)
         
-        # Mostrar tabla clickeable a todo lo ancho
-        grid_response = AgGrid(
+        # Mostrar tabla con selección usando st.dataframe
+        event = st.dataframe(
             instalaciones_con_acumulado,
-            gridOptions=gb_top.build(),
-            update_mode=GridUpdateMode.SELECTION_CHANGED,
+            use_container_width=True,
             height=400,
-            fit_columns_on_grid_load=True,
-            theme='streamlit'
+            hide_index=True,
+            on_select="rerun",
+            selection_mode="single-row",
+            column_config={
+                "Empresa_Instalacion": st.column_config.TextColumn("Empresa - Instalación", width="large"),
+                "Acumulado": st.column_config.NumberColumn(
+                    "Acumulado",
+                    format="%d",
+                    width="medium"
+                )
+            }
         )
         
         # Procesar selección
-        if grid_response['selected_rows'] is not None and len(grid_response['selected_rows']) > 0:
-            selected_instalacion = grid_response['selected_rows'].iloc[0]['Empresa_Instalacion']
+        if len(event.selection.rows) > 0:
+            selected_idx = event.selection.rows[0]
+            selected_instalacion = str(instalaciones_con_acumulado.iloc[selected_idx]['Empresa_Instalacion'])
             st.session_state['instalacion_seleccionada'] = selected_instalacion
-            st.info(f"📍 Instal.lació seleccionada: {selected_instalacion}")
         
         # Mostrar detalle de la instalación seleccionada
         if 'instalacion_seleccionada' in st.session_state:
@@ -445,25 +456,38 @@ with tab3:
                 # Filtrar registros con acumulado mayor a 0
                 detalle_mostrar = detalle_mostrar[detalle_mostrar["Acumulado"] > 0]
                 
-                # Configurar AgGrid para el detalle
-                gb_detalle = GridOptionsBuilder.from_dataframe(detalle_mostrar)
-                gb_detalle.configure_default_column(
-                    resizable=True, 
-                    filter=True, 
-                    sortable=True,
-                    minWidth=100,
-                    flex=1
-                )
-                gb_detalle.configure_pagination(paginationAutoPageSize=True)
-                gb_detalle.configure_grid_options(domLayout='normal')
+                # Convertir Fecha a string para visualización
+                if 'Fecha' in detalle_mostrar.columns:
+                    detalle_mostrar['Fecha'] = detalle_mostrar['Fecha'].dt.strftime('%d/%m/%Y')
                 
-                AgGrid(
+                # Convertir tipos numpy a tipos Python nativos para evitar errores de serialización JSON
+                # Forzar a object dtype para que pandas no reconvierta a numpy
+                for col in detalle_mostrar.select_dtypes(include=['int64', 'int32', 'int16', 'int8']).columns:
+                    detalle_mostrar[col] = detalle_mostrar[col].astype(object)
+                for col in detalle_mostrar.select_dtypes(include=['float64', 'float32']).columns:
+                    detalle_mostrar[col] = detalle_mostrar[col].astype(object)
+                
+                # Resetear índice y asegurar que el DataFrame esté limpio
+                detalle_mostrar = detalle_mostrar.reset_index(drop=True)
+                
+                # Mostrar tabla con st.dataframe (nativo de Streamlit, más confiable)
+                st.dataframe(
                     detalle_mostrar,
-                    gridOptions=gb_detalle.build(),
-                    update_mode=GridUpdateMode.NO_UPDATE,
+                    use_container_width=True,
                     height=400,
-                    fit_columns_on_grid_load=True,
-                    theme='streamlit'
+                    hide_index=True,
+                    column_config={
+                        "Fecha": st.column_config.TextColumn("Fecha", width="medium"),
+                        "TipoVinoBase": st.column_config.TextColumn("Tipo Vino Base", width="medium"),
+                        "Segmento": st.column_config.TextColumn("Segmento", width="medium"),
+                        "Zona": st.column_config.TextColumn("Zona", width="medium"),
+                        "SubZona": st.column_config.TextColumn("SubZona", width="medium"),
+                        "Acumulado": st.column_config.NumberColumn(
+                            "Acumulado",
+                            format="%d",
+                            width="medium"
+                        )
+                    }
                 )
                 
                 # Botón para limpiar selección
