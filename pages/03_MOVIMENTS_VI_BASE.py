@@ -74,25 +74,24 @@ def calcular_opcions_filtres_dinamics(df, filtres_actuals, camps_filtres):
     Returns:
         Dict amb les opcions disponibles per a cada camp
     """
-    df_temp = df.copy()
-    
-    # Aplicar filtres existents (excepte els valors per defecte)
-    for camp, valor in filtres_actuals.items():
-        if valor not in ["Tots", "Todas", "Todos"] and camp in df_temp.columns:
-            df_temp = df_temp[df_temp[camp] == valor]
-    
-    # Calcular opcions disponibles per cada camp
     opcions = {}
-    for camp in camps_filtres:
-        if camp in df_temp.columns:
-            valors_unics = sorted(df_temp[camp].dropna().unique().tolist())
+    
+    # Per cada camp, calcular opcions basant-se en els altres filtres
+    for camp_actual in camps_filtres:
+        df_temp = df.copy()
+        
+        # Aplicar tots els filtres EXCEPTE el camp actual
+        for camp, valor in filtres_actuals.items():
+            if camp != camp_actual and valor not in ["Tots", "Todas", "Todos"] and camp in df_temp.columns:
+                df_temp = df_temp[df_temp[camp] == valor]
+        
+        # Obtenir valors únics per al camp actual
+        if camp_actual in df_temp.columns:
+            valors_unics = sorted(df_temp[camp_actual].dropna().unique().tolist())
             
-            # Afegir valor per defecte segons el camp
-            if camp in ['Zona', 'SubZona']:
-                opcions[camp] = ["Todas"] + valors_unics
-            else:
-                opcions[camp] = ["Todos"] + valors_unics
-                
+            # Afegir valor per defecte (siempre "Todos" para consistencia)
+            opcions[camp_actual] = ["Todos"] + valors_unics
+    
     return opcions
 
 st.title("MOVIMENTS VI BASE")
@@ -209,18 +208,20 @@ with tab2:
             # Aplicar filtres dinàmics
             df_filtrado = df_resultado_con_empresa_instalacion.copy()
             
-            # Obtenir valors actuals dels filtres des de session_state
+            # Obtener valores actuales de los filtros (todos con "Todos" para consistencia)
             filtres_actuals = {
-                'Empresa_Instalacion': st.session_state.get('filtro_empresa_instalacion', 'Todas'),
+                'Empresa_Instalacion': st.session_state.get('filtro_empresa_instalacion', 'Todos'),
                 'TipoVinoBase': st.session_state.get('filtro_tipo_vino', 'Todos'),
                 'Segmento': st.session_state.get('filtro_segmento', 'Todos'),
-                'Zona': st.session_state.get('filtro_zona', 'Todas'),
-                'SubZona': st.session_state.get('filtro_subzona', 'Todas')
+                'Zona': st.session_state.get('filtro_zona', 'Todos'),
+                'SubZona': st.session_state.get('filtro_subzona', 'Todos')
             }
             
-            # Calcular opcions disponibles basant-se en les seleccions actuals
+            # Calcular opciones disponibles de forma dinámica e inteligente
+            # Cada filtro muestra opciones basadas en los OTROS filtros activos
             camps_filtres = ['Empresa_Instalacion', 'TipoVinoBase', 'Segmento', 'Zona', 'SubZona']
             opcions_disponibles = calcular_opcions_filtres_dinamics(df_resultado_con_empresa_instalacion, filtres_actuals, camps_filtres)
+
 
             with col_filter1:
                 # Filtro Empresa-Instalación
@@ -233,7 +234,7 @@ with tab2:
                 )
                 
                 # Aplicar filtro
-                if empresa_instalacion_seleccionada != "Todas":
+                if empresa_instalacion_seleccionada != "Todos":
                     df_filtrado = df_filtrado[df_filtrado["Empresa_Instalacion"] == empresa_instalacion_seleccionada]
             
             with col_filter2:
@@ -275,7 +276,7 @@ with tab2:
                 )
                 
                 # Aplicar filtro
-                if zona_seleccionada != "Todas":
+                if zona_seleccionada != "Todos":
                     df_filtrado = df_filtrado[df_filtrado["Zona"] == zona_seleccionada]
             
             with col_filter5:
@@ -289,48 +290,70 @@ with tab2:
                 )
                 
                 # Aplicar filtro
-                if subzona_seleccionada != "Todas":
+                if subzona_seleccionada != "Todos":
                     df_filtrado = df_filtrado[df_filtrado["SubZona"] == subzona_seleccionada]
         
-        st.markdown(f"### 📋 Taula filtrada ({len(df_filtrado)} registres)")
+        # Verificar si hay algún filtro activo
+        filtros_activos = []
+        if empresa_instalacion_seleccionada != "Todos":
+            filtros_activos.append(f"Empresa: {empresa_instalacion_seleccionada}")
+        if tipo_vino_seleccionado != "Todos":
+            filtros_activos.append(f"Tipo Vino: {tipo_vino_seleccionado}")
+        if segmento_seleccionado != "Todos":
+            filtros_activos.append(f"Segmento: {segmento_seleccionado}")
+        if zona_seleccionada != "Todos":
+            filtros_activos.append(f"Zona: {zona_seleccionada}")
+        if subzona_seleccionada != "Todos":
+            filtros_activos.append(f"SubZona: {subzona_seleccionada}")
         
-        # Preparar datos para mostrar
-        columnas_mostrar = ["Fecha", "Empresa_Instalacion", "TipoVinoBase", "Segmento", "Zona", "SubZona", "Acumulado"]
-        df_para_mostrar = df_filtrado[columnas_mostrar].copy()
-        
-        # Convertir Fecha a string si es datetime
-        if pd.api.types.is_datetime64_any_dtype(df_para_mostrar['Fecha']):
-            df_para_mostrar['Fecha'] = df_para_mostrar['Fecha'].dt.strftime('%d/%m/%Y')
-        
-        # Convertir tipos numpy a Python nativos para evitar problemas
-        for col in df_para_mostrar.select_dtypes(include=['int64', 'int32', 'int16', 'int8']).columns:
-            df_para_mostrar[col] = df_para_mostrar[col].astype(object)
-        for col in df_para_mostrar.select_dtypes(include=['float64', 'float32']).columns:
-            df_para_mostrar[col] = df_para_mostrar[col].astype(object)
-        
-        # Resetear índice
-        df_para_mostrar = df_para_mostrar.reset_index(drop=True)
-        
-        # Mostrar tabla con st.dataframe nativo (más rápido y confiable)
-        st.dataframe(
-            df_para_mostrar,
-            use_container_width=True,
-            height=600,
-            hide_index=True,
-            column_config={
-                "Fecha": st.column_config.TextColumn("Fecha", width="small"),
-                "Empresa_Instalacion": st.column_config.TextColumn("Empresa - Instalación", width="large"),
-                "TipoVinoBase": st.column_config.TextColumn("Tipo Vino Base", width="medium"),
-                "Segmento": st.column_config.TextColumn("Segmento", width="medium"),
-                "Zona": st.column_config.TextColumn("Zona", width="medium"),
-                "SubZona": st.column_config.TextColumn("SubZona", width="medium"),
-                "Acumulado": st.column_config.NumberColumn(
-                    "Acumulado",
-                    format="%d",
-                    width="medium"
-                )
-            }
-        )
+        # Mostrar tabla solo si hay filtros activos
+        if len(filtros_activos) > 0:
+            # Mostrar información de filtrado
+            st.info(f"📊 Mostrant {len(df_filtrado):,} registres | Filtres actius: {', '.join(filtros_activos)}")
+            
+            st.markdown(f"### 📋 Taula filtrada ({len(df_filtrado)} registres)")
+            
+            # Preparar datos para mostrar
+            columnas_mostrar = ["Fecha", "Empresa_Instalacion", "TipoVinoBase", "Segmento", "Zona", "SubZona", "Acumulado"]
+            df_para_mostrar = df_filtrado[columnas_mostrar].copy()
+            
+            # Convertir Fecha a string si es datetime
+            if pd.api.types.is_datetime64_any_dtype(df_para_mostrar['Fecha']):
+                df_para_mostrar['Fecha'] = df_para_mostrar['Fecha'].dt.strftime('%d/%m/%Y')
+            
+            # Convertir tipos numpy a Python nativos para evitar problemas
+            for col in df_para_mostrar.select_dtypes(include=['int64', 'int32', 'int16', 'int8']).columns:
+                df_para_mostrar[col] = df_para_mostrar[col].astype(object)
+            for col in df_para_mostrar.select_dtypes(include=['float64', 'float32']).columns:
+                df_para_mostrar[col] = df_para_mostrar[col].astype(object)
+            
+            # Resetear índice
+            df_para_mostrar = df_para_mostrar.reset_index(drop=True)
+            
+            # Mostrar tabla con st.dataframe nativo (más rápido y confiable)
+            st.dataframe(
+                df_para_mostrar,
+                use_container_width=True,
+                height=600,
+                hide_index=True,
+                column_config={
+                    "Fecha": st.column_config.TextColumn("Fecha", width="small"),
+                    "Empresa_Instalacion": st.column_config.TextColumn("Empresa - Instalación", width="large"),
+                    "TipoVinoBase": st.column_config.TextColumn("Tipo Vino Base", width="medium"),
+                    "Segmento": st.column_config.TextColumn("Segmento", width="medium"),
+                    "Zona": st.column_config.TextColumn("Zona", width="medium"),
+                    "SubZona": st.column_config.TextColumn("SubZona", width="medium"),
+                    "Acumulado": st.column_config.NumberColumn(
+                        "Acumulado",
+                        format="%d",
+                        width="medium"
+                    )
+                }
+            )
+        else:
+            # Mostrar mensaje cuando no hay filtros activos
+            st.info("👆 Selecciona almenys un filtre per veure els resultats")
+            st.markdown(f"### 📊 Dades disponibles: {len(df_resultado_con_empresa_instalacion):,} registres totals")
         
         # Botón de descarga para datos filtrados
         if len(df_filtrado) < len(df_resultado_con_empresa_instalacion):
