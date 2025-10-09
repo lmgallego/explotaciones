@@ -216,3 +216,11 @@ div[data-testid="stPageLink"] button:hover {
   font-size: 12px;
   opacity: 0.85;
 }
+
+/* AgGrid: realce de fila seleccionada (Gestió Stocks) */
+.ag-theme-streamlit .ag-row.ag-row-selected {
+  background-color: rgba(33, 150, 243, 0.15) !important; /* azul suave */
+}
+.ag-theme-streamlit .ag-row-focus .ag-cell-focus {
+  outline: 2px solid #2196F3 !important;
+}

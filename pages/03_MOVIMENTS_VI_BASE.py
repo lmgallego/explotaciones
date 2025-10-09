@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode, JsCode
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
@@ -298,6 +298,18 @@ with tab2:
         # Configurar AgGrid - Reordenar columnas para mostrar Empresa_Instalacion
         columnas_mostrar = ["Fecha", "Empresa_Instalacion", "TipoVinoBase", "Segmento", "Zona", "SubZona", "Acumulado"]
         df_para_mostrar = df_filtrado[columnas_mostrar].copy()
+
+        # Normalizar tipos para evitar celdas vacías en AgGrid
+        if 'Fecha' in df_para_mostrar.columns:
+            df_para_mostrar['Fecha'] = pd.to_datetime(df_para_mostrar['Fecha'], errors='coerce').dt.strftime('%Y-%m-%d')
+        df_para_mostrar['Acumulado'] = pd.to_numeric(df_para_mostrar['Acumulado'], errors='coerce').fillna(0)
+        for col in ['Empresa_Instalacion','TipoVinoBase','Segmento','Zona','SubZona']:
+            if col in df_para_mostrar.columns:
+                df_para_mostrar[col] = df_para_mostrar[col].astype(str).fillna('')
+
+        # Agregar identificador de fila único y resetear índice
+        df_para_mostrar = df_para_mostrar.reset_index(drop=True)
+        df_para_mostrar['__row_id__'] = df_para_mostrar.index.astype(str)
         
         # Configurar AgGrid para máximo aprovechamiento del ancho
         gb = GridOptionsBuilder.from_dataframe(df_para_mostrar)
@@ -319,6 +331,7 @@ with tab2:
             enableRangeSelection=False,
             rowSelection='multiple'
         )
+        gb.configure_column('__row_id__', hide=True)
         
         # Usar contenedor completo para la tabla
         AgGrid(
@@ -327,8 +340,9 @@ with tab2:
             update_mode=GridUpdateMode.NO_UPDATE,
             height=600,  # Aumentar altura también
             fit_columns_on_grid_load=True,
-            allow_unsafe_jscode=True,
-            theme='streamlit'  # Tema que se adapta mejor al ancho
+            allow_unsafe_jscode=False,
+            theme='streamlit',  # Tema que se adapta mejor al ancho
+            key='tabla_filtrada'
         )
         
         # Botón de descarga para datos filtrados
@@ -360,6 +374,8 @@ with tab3:
             df_resultado_con_empresa_instalacion["Empresa"] + "->" + 
             df_resultado_con_empresa_instalacion["Instalacion"]
         )
+        # Normalizar clave para filtros robustos
+        df_resultado_con_empresa_instalacion["Empresa_Instalacion"] = df_resultado_con_empresa_instalacion["Empresa_Instalacion"].astype(str).str.strip()
         
         # Crear columna FilaOriginal para mantener el orden original del Excel
         df_resultado_con_empresa_instalacion['FilaOriginal'] = range(len(df_resultado_con_empresa_instalacion))
@@ -382,32 +398,70 @@ with tab3:
         instalaciones_con_acumulado = instalaciones_agrupadas[instalaciones_agrupadas["Acumulado"] > 0].sort_values("Acumulado", ascending=False)
         
         # Configurar AgGrid para hacer la tabla clickeable
-        gb_top = GridOptionsBuilder.from_dataframe(instalaciones_con_acumulado)
-        gb_top.configure_selection('single', use_checkbox=False, rowMultiSelectWithClick=False)
+        # Normalizar datos para evitar problemas de serialización en AgGrid y añadir ID único
+        df_top_mostrar = instalaciones_con_acumulado.copy()
+        df_top_mostrar['Empresa_Instalacion'] = df_top_mostrar['Empresa_Instalacion'].astype(str).fillna('').str.strip()
+        df_top_mostrar['Acumulado'] = pd.to_numeric(df_top_mostrar['Acumulado'], errors='coerce').fillna(0)
+        df_top_mostrar = df_top_mostrar.reset_index(drop=True)
+        df_top_mostrar['__row_id__'] = df_top_mostrar.index.astype(str)
+        
+        # Configurar AgGrid para hacer la tabla clickeable
+        gb_top = GridOptionsBuilder.from_dataframe(df_top_mostrar)
+        gb_top.configure_selection('single', use_checkbox=True, rowMultiSelectWithClick=False)
         gb_top.configure_default_column(resizable=True, sortable=True, flex=1)
-        gb_top.configure_grid_options(domLayout='normal')
+        gb_top.configure_grid_options(domLayout='normal', suppressRowClickSelection=False, getRowId=JsCode("function(params) { return params.data.__row_id__; }"))
         gb_top.configure_pagination(paginationAutoPageSize=True)
+        gb_top.configure_column('__row_id__', hide=True)
         
         # Mostrar tabla clickeable a todo lo ancho
         grid_response = AgGrid(
-            instalaciones_con_acumulado,
+            df_top_mostrar,
             gridOptions=gb_top.build(),
             update_mode=GridUpdateMode.SELECTION_CHANGED,
             height=400,
             fit_columns_on_grid_load=True,
-            theme='streamlit'
+            theme='streamlit',
+            allow_unsafe_jscode=True,
+            key='gestio_stocks_top_v2',
+            data_return_mode=DataReturnMode.FILTERED_AND_SORTED
         )
         
-        # Procesar selección
-        if grid_response['selected_rows'] is not None and len(grid_response['selected_rows']) > 0:
-            selected_instalacion = grid_response['selected_rows'].iloc[0]['Empresa_Instalacion']
+        # Procesar selección de forma segura (None-safe y compatible con DataFrame)
+        _sr = grid_response.get('selected_rows', None)
+        if _sr is None:
+            selected_rows = []
+        elif isinstance(_sr, pd.DataFrame):
+            selected_rows = _sr.to_dict('records')
+        elif isinstance(_sr, list):
+            selected_rows = _sr
+        else:
+            try:
+                selected_rows = list(_sr)
+            except Exception:
+                selected_rows = []
+        selected_count = len(selected_rows)
+        st.caption(f"Selecció actual: {selected_count} fila(es)")
+        selected_instalacion = None
+        if isinstance(selected_rows, list) and selected_count > 0:
+            selected_instalacion = selected_rows[0].get('Empresa_Instalacion')
+        banner_placeholder = st.empty()
+        # Gestionar actualización de estado según el número de filas seleccionadas
+        if selected_count == 1 and selected_instalacion:
+            # Siempre actualizar para asegurar consistencia
             st.session_state['instalacion_seleccionada'] = selected_instalacion
-            st.info(f"📍 Instal.lació seleccionada: {selected_instalacion}")
+        elif selected_count == 0:
+            # Solo limpiar si no hay selección
+            if 'instalacion_seleccionada' in st.session_state:
+                st.session_state.pop('instalacion_seleccionada', None)
+            banner_placeholder.empty()
+        elif selected_count > 1:
+            banner_placeholder.warning("Selecciona només una instal·lació per veure el detall.")
         
         # Mostrar detalle de la instalación seleccionada
         if 'instalacion_seleccionada' in st.session_state:
-            st.markdown("---")
             instalacion_sel = st.session_state['instalacion_seleccionada']
+            banner_placeholder.info(f"📍 Instal.lació seleccionada: {instalacion_sel}")
+            st.markdown("---")
             st.markdown(f"### 🔍 Detall de: {instalacion_sel}")
             
             # Filtrar datos de la instalación seleccionada y aplicar lógica de estado actual
@@ -439,11 +493,20 @@ with tab3:
                     ascending=[False, True]
                 ).copy()
                 
-                # Seleccionar columnas relevantes para mostrar y filtrar acumulado > 0
+                # Seleccionar columnas relevantes para mostrar (mostrem tots els registres, incloent Acumulat = 0 o negatiu)
                 columnas_detalle = ["Fecha", "TipoVinoBase", "Segmento", "Zona", "SubZona", "Acumulado"]
                 detalle_mostrar = detalle_ordenado[columnas_detalle].copy()
-                # Filtrar registros con acumulado mayor a 0
-                detalle_mostrar = detalle_mostrar[detalle_mostrar["Acumulado"] > 0]
+                # Nota: No filtrem per Acumulat > 0 per poder analitzar l'estat complet
+
+                # Normalizar tipos y añadir ID
+                if 'Fecha' in detalle_mostrar.columns:
+                    detalle_mostrar['Fecha'] = pd.to_datetime(detalle_mostrar['Fecha'], errors='coerce').dt.strftime('%Y-%m-%d')
+                detalle_mostrar['Acumulado'] = pd.to_numeric(detalle_mostrar['Acumulado'], errors='coerce').fillna(0)
+                for col in ["TipoVinoBase","Segmento","Zona","SubZona"]:
+                    if col in detalle_mostrar.columns:
+                        detalle_mostrar[col] = detalle_mostrar[col].astype(str).fillna('')
+                detalle_mostrar = detalle_mostrar.reset_index(drop=True)
+                detalle_mostrar['__row_id__'] = detalle_mostrar.index.astype(str)
                 
                 # Configurar AgGrid para el detalle
                 gb_detalle = GridOptionsBuilder.from_dataframe(detalle_mostrar)
@@ -456,6 +519,7 @@ with tab3:
                 )
                 gb_detalle.configure_pagination(paginationAutoPageSize=True)
                 gb_detalle.configure_grid_options(domLayout='normal')
+                gb_detalle.configure_column('__row_id__', hide=True)
                 
                 AgGrid(
                     detalle_mostrar,
@@ -463,7 +527,9 @@ with tab3:
                     update_mode=GridUpdateMode.NO_UPDATE,
                     height=400,
                     fit_columns_on_grid_load=True,
-                    theme='streamlit'
+                    theme='streamlit',
+                    allow_unsafe_jscode=False,
+                    key='tabla_stocks_detalle'
                 )
                 
                 # Botón para limpiar selección
@@ -471,6 +537,8 @@ with tab3:
                     if 'instalacion_seleccionada' in st.session_state:
                         del st.session_state['instalacion_seleccionada']
                     st.rerun()
+            else:
+                st.warning("⚠️ No hi han registres per a la instal·lació seleccionada.")
     
     else:
         st.info("📂 Procesa l'arxiu per veure els resultats aquí")
