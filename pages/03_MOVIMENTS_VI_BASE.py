@@ -309,13 +309,14 @@ with tab2:
             flex=1  # Permite que las columnas se expandan proporcionalmente
         )
         gb.configure_pagination(paginationAutoPageSize=True)
-        gb.configure_side_bar()
+        # Eliminado el sidebar de AgGrid para evitar el error de módulos no registrados (#200)
+        # gb.configure_side_bar()
         
         # Configuraciones adicionales para maximizar el ancho
         gb.configure_grid_options(
             domLayout='normal',
             suppressHorizontalScroll=False,
-            enableRangeSelection=True,
+            enableRangeSelection=False,
             rowSelection='multiple'
         )
         
