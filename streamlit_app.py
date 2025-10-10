@@ -1,16 +1,8 @@
 import streamlit as st
-
-# Configurar layout wide permanente
-st.set_page_config(
-    page_title="Control PGC",
-    page_icon="🍇",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
 from pathlib import Path
 from core.icons import get_svg_icon
 
-# Configuración de página - DEBE ser lo primero
+# Configuración de página - DEBE ser lo primero después de los imports
 st.set_page_config(
     page_title="Control PGC",
     page_icon="📊",
