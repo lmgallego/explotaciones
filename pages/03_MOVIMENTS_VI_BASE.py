@@ -415,6 +415,31 @@ with tab3:
             instalaciones_con_acumulado[col] = instalaciones_con_acumulado[col].astype(object)
         
         
+        # Buscador dinámico con botón de limpieza
+        col_search, col_clear = st.columns([4, 1])
+        with col_search:
+            search_term = st.text_input(
+                "🔍 Cerca Empresa-Instalació",
+                placeholder="Escriu per filtrar...",
+                key="search_instalacion_input"
+            )
+        with col_clear:
+            st.write("")  # Espaciado
+            if st.button("🗑️ Netejar", key="clear_search", use_container_width=True):
+                # Limpiar el campo mediante query params para forzar reset
+                st.query_params.clear()
+                del st.session_state['search_instalacion_input']
+                st.rerun()
+        
+        # Filtrar por término de búsqueda si existe (filtrado dinámico)
+        if search_term:
+            instalaciones_con_acumulado = instalaciones_con_acumulado[
+                instalaciones_con_acumulado['Empresa_Instalacion'].str.contains(search_term, case=False, na=False)
+            ]
+        
+        # Mostrar contador de resultados
+        st.caption(f"Mostrant {len(instalaciones_con_acumulado)} instal·lacions")
+        
         # Mostrar tabla con selección usando st.dataframe
         event = st.dataframe(
             instalaciones_con_acumulado,
