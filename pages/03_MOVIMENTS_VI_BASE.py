@@ -954,6 +954,36 @@ with tab4:
                         value=f"{row['Acumulado']:,.0f}",
                         delta=f"{porcentaje:.1f}%"
                     )
+                
+                # Botón de descarga de registros utilizados para el cálculo de segmentos
+                try:
+                    if not df_agrupado.empty:
+                        # Preparar DataFrame para descarga
+                        df_descarga_segmentos = df_agrupado.copy()
+                        
+                        # Convertir Fecha a string si es datetime
+                        if pd.api.types.is_datetime64_any_dtype(df_descarga_segmentos['Fecha']):
+                            df_descarga_segmentos['Fecha'] = df_descarga_segmentos['Fecha'].dt.strftime('%d/%m/%Y')
+                        
+                        # Seleccionar columnas relevantes
+                        columnas_descarga = ['Fecha', 'Empresa', 'Instalacion', 'TipoVinoBase', 'Zona', 'SubZona', 'Segmento', 'Acumulado']
+                        df_descarga_segmentos = df_descarga_segmentos[[col for col in columnas_descarga if col in df_descarga_segmentos.columns]]
+                        
+                        # Generar Excel
+                        output_segmentos = io.BytesIO()
+                        with pd.ExcelWriter(output_segmentos, engine="openpyxl") as writer:
+                            df_descarga_segmentos.to_excel(writer, sheet_name="Segments_Calcul", index=False)
+                        
+                        st.download_button(
+                            label=f"📥 Descarregar registres ({len(df_descarga_segmentos)} registres)",
+                            data=output_segmentos.getvalue(),
+                            file_name="Segments_Calcul_Registres.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True,
+                            key="download_segmentos_metriques"
+                        )
+                except Exception:
+                    pass
             
             st.markdown("---")
             
