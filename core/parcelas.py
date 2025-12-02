@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from datetime import datetime
 from .utils import (
     norm_text, norm_segmento, norm_variedad, norm_nif, norm_refparcela,
     to_numeric_safe, codigo_variedad_from_name, crear_diccionario_variedades,
@@ -97,6 +98,16 @@ def procesar_parcelas(df: pd.DataFrame) -> pd.DataFrame:
     col_est = find_col(df_clean, ['Estado', 'estado', 'Estat', 'estat', 'Status'])
     if col_est:
         df_clean.rename(columns={col_est: 'Estado'}, inplace=True)
+
+    # AñoPlantacion
+    col_año_plant = find_col(df_clean, [
+        'AñoPlantacion', 'AnoPlantacion', 'Año Plantacion', 'Ano Plantacion',
+        'añoplantacion', 'anoplantacion', 'Any Plantacio', 'AnyPlantacio',
+        'Año_Plantacion', 'Ano_Plantacion', 'AnyPlantació'
+    ])
+    if col_año_plant:
+        df_clean.rename(columns={col_año_plant: 'AñoPlantacion'}, inplace=True)
+        df_clean['AñoPlantacion'] = pd.to_numeric(df_clean['AñoPlantacion'], errors='coerce')
 
     # ---- Filtros: Segmento = GUARDA (excluye Guarda Superior implícitamente) ----
     if 'Segmento' in df_clean.columns:
@@ -198,7 +209,8 @@ def crear_dataframe_final(df_clean: pd.DataFrame, rendimiento_ha: float, agrupar
         'nombre_completo': 'first',
         'Segmento': 'first',
         'Variedad': 'first',
-        'codigo_variedad': 'first'
+        'codigo_variedad': 'first',
+        'AñoPlantacion': 'first'
     }
 
     df_final = (
@@ -215,8 +227,11 @@ def crear_dataframe_final(df_clean: pd.DataFrame, rendimiento_ha: float, agrupar
         rename_map['Ejercicio'] = 'ejercicio'
     df_final = df_final.rename(columns=rename_map)
 
-    columnas_finales = (['ejercicio'] if 'ejercicio' in df_final.columns else []) + \
-                       ['nif', 'nombre', 'vartip', 'segmento', 'hectareas_variedad', 'rendimiento']
+    # Incluir AñoPlantacion si existe para verificación
+    columnas_base = ['nif', 'nombre', 'vartip', 'segmento', 'hectareas_variedad', 'rendimiento']
+    if 'AñoPlantacion' in df_final.columns:
+        columnas_base.append('AñoPlantacion')
+    columnas_finales = (['ejercicio'] if 'ejercicio' in df_final.columns else []) + columnas_base
     df_final = df_final[columnas_finales]
     df_final['hectareas_variedad'] = df_final['hectareas_variedad'].astype(float).round(4)
     df_final['rendimiento'] = df_final['rendimiento'].astype(float).round(2)
@@ -224,4 +239,37 @@ def crear_dataframe_final(df_clean: pd.DataFrame, rendimiento_ha: float, agrupar
     sort_cols = (['ejercicio', 'rendimiento'] if 'ejercicio' in df_final.columns else ['rendimiento'])
     df_final = df_final.sort_values(sort_cols, ascending=[True, False] if 'ejercicio' in df_final.columns else [False]).reset_index(drop=True)
     return df_final
+
+
+def filtrar_por_antiguedad_plantacion(df: pd.DataFrame, años_minimos: int = 3) -> pd.DataFrame:
+    """
+    Filtra parcelas que tengan al menos X años de antigüedad de plantación.
+    Elimina parcelas sin AñoPlantacion (valor nulo).
+    
+    Args:
+        df: DataFrame con columna 'AñoPlantacion' (ya procesado por procesar_parcelas)
+        años_minimos: Antigüedad mínima requerida (default: 3 para RVC, usar 2 para Cavanet)
+    
+    Returns:
+        DataFrame filtrado con solo parcelas que cumplen la antigüedad mínima
+    
+    Ejemplo:
+        - Si año_actual=2025 y años_minimos=3: año_limite=2022
+          Se conservan parcelas con AñoPlantacion <= 2022
+          Se eliminan parcelas con AñoPlantacion 2023, 2024, 2025 o nulo
+    """
+    if 'AñoPlantacion' not in df.columns:
+        # Sin columna, no podemos filtrar - devolvemos el df original
+        return df
+    
+    año_actual = datetime.now().year
+    año_limite = año_actual - años_minimos
+    
+    # Filtrar: conservar solo parcelas con AñoPlantacion válido y <= año_limite
+    df_filtrado = df[
+        df['AñoPlantacion'].notna() & 
+        (df['AñoPlantacion'] <= año_limite)
+    ].copy()
+    
+    return df_filtrado
 

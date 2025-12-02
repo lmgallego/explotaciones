@@ -16,7 +16,7 @@ try:
 except Exception:
     RENDIMIENTO_POR_HECTAREA_DEFAULT = 10500
 
-from core.parcelas import procesar_parcelas, crear_dataframe_final
+from core.parcelas import procesar_parcelas, crear_dataframe_final, filtrar_por_antiguedad_plantacion
 from core.it04 import cargar_it04, construir_rendimiento_ajustado
 from core.rvc import (
     procesar_rvc, crear_vartip_rvc, controlar_rendimientos,
@@ -91,8 +91,12 @@ if process_parcelas:
 
         progress_parc.progress(55, text="Procesando Parcelas…")
         # Procesado y dataframe final
-        from core.parcelas import procesar_parcelas, crear_dataframe_final  # aseguramos la versión nueva
+        from core.parcelas import procesar_parcelas, crear_dataframe_final, filtrar_por_antiguedad_plantacion
         df_parcelas_clean = procesar_parcelas(dfp)
+        
+        # Filtro por antigüedad de plantación: mínimo 3 años para RVC (CAT PGC)
+        progress_parc.progress(65, text="Filtrando por antigüedad de plantación (mín. 3 años)…")
+        df_parcelas_clean = filtrar_por_antiguedad_plantacion(df_parcelas_clean, años_minimos=3)
 
         progress_parc.progress(75, text="Construyendo dataframe final…")
         df_final = crear_dataframe_final(

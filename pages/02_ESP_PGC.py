@@ -23,6 +23,7 @@ from core.cavanet import (
     crear_vartip_cavanet, controlar_rendimientos_por_fecha,
     generar_resumenes_cavanet, build_excel_bytes_cavanet,
 )
+from core.parcelas import filtrar_por_antiguedad_plantacion
 
 st.title("ESP PGC")
 
@@ -65,6 +66,11 @@ if procesar:
         df_parcelas = cargar_parcelas_desde_excel(f_parcelas.read())
         progress_cav.progress(35, text="Procesando Parcelas…")
         df_parcelas_clean = procesar_parcelas(df_parcelas)
+        
+        # Filtro por antigüedad de plantación: mínimo 2 años para Cavanet (ESP PGC)
+        progress_cav.progress(42, text="Filtrando por antigüedad de plantación (mín. 2 años)…")
+        df_parcelas_clean = filtrar_por_antiguedad_plantacion(df_parcelas_clean, años_minimos=2)
+        
         progress_cav.progress(50, text="Construyendo dataframe final de Parcelas…")
         df_final = crear_dataframe_final_parcelas(
             df_parcelas_clean,

@@ -156,6 +156,9 @@ def procesar_parcelas(df: pd.DataFrame) -> pd.DataFrame:
         ('PorcentajeTitularidad', ['PorcentajeTitularidad','porcentajetitularidad','Porcentaje Titularidad','PorcTitularidad']),
         ('NRegistro', ['NRegistro','Nº Registro','NºRegistro','NumRegistro']),
         ('Estado', ['Estado','estado','Estat','estat','Status']),
+        ('AñoPlantacion', ['AñoPlantacion','AnoPlantacion','Año Plantacion','Ano Plantacion',
+                          'añoplantacion','anoplantacion','Any Plantacio','AnyPlantacio',
+                          'Año_Plantacion','Ano_Plantacion','AnyPlantació']),
     ]
     for std, cands in rename_pairs:
         c = _find_col(df_clean, cands)
@@ -212,6 +215,10 @@ def procesar_parcelas(df: pd.DataFrame) -> pd.DataFrame:
         ej_num = pd.to_numeric(df_clean['Ejercicio'], errors='coerce')
         df_clean['Ejercicio'] = np.where(ej_num.notna(), ej_num.astype('Int64'), df_clean['Ejercicio'].astype(str))
 
+    # AñoPlantacion a numérico (el filtrado se hace después en la página)
+    if 'AñoPlantacion' in df_clean.columns:
+        df_clean['AñoPlantacion'] = pd.to_numeric(df_clean['AñoPlantacion'], errors='coerce')
+
     return df_clean
 
 
@@ -224,7 +231,8 @@ def crear_dataframe_final_parcelas(
     hect = (df_clean.groupby(clave, dropna=False)['superficie_efectiva']
             .sum().reset_index().rename(columns={'superficie_efectiva':'hectareas_variedad'}))
     agg = {
-        'NIF':'first','nombre_completo':'first','Segmento':'first','Variedad':'first','codigo_variedad':'first'
+        'NIF':'first','nombre_completo':'first','Segmento':'first','Variedad':'first','codigo_variedad':'first',
+        'AñoPlantacion':'first'
     }
     df_final = (df_clean.groupby(clave, dropna=False).agg(agg).reset_index()
                 .merge(hect, on=clave, how='left'))
@@ -235,8 +243,11 @@ def crear_dataframe_final_parcelas(
         rename_map['Ejercicio'] = 'ejercicio'
     df_final.rename(columns=rename_map, inplace=True)
 
-    cols = (['ejercicio'] if 'ejercicio' in df_final.columns else []) + \
-           ['nif','nombre','vartip','segmento','hectareas_variedad','rendimiento']
+    # Incluir AñoPlantacion si existe para verificación
+    cols_base = ['nif','nombre','vartip','segmento','hectareas_variedad','rendimiento']
+    if 'AñoPlantacion' in df_final.columns:
+        cols_base.append('AñoPlantacion')
+    cols = (['ejercicio'] if 'ejercicio' in df_final.columns else []) + cols_base
     df_final = df_final[cols]
     df_final['hectareas_variedad'] = df_final['hectareas_variedad'].astype(float).round(4)
     df_final['rendimiento'] = df_final['rendimiento'].astype(float).round(2)
